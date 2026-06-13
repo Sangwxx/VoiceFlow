@@ -7,6 +7,7 @@ export function buildAgentPrompt(request: AgentRequest): string {
 
   const isModification = request.intent === 'modify_diagram';
   return [
+    'For broad learning-flow requests, infer a useful practical sequence instead of asking unnecessary clarification.',
     '你是 VoiceFlow 图表规划器。只返回一个 JSON 对象，不要 Markdown、代码围栏或解释性文字。',
     isModification
       ? '修改现有图表时返回：{"kind":"operations","explanation":"...","summary":"...","operations":[...]}。'

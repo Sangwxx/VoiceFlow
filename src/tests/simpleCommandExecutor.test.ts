@@ -61,6 +61,65 @@ describe('simpleCommandExecutor', () => {
     ).toBe(false);
   });
 
+  it('creates a basic shape locally without AI', async () => {
+    const executor = createSimpleCommandExecutor(speechFeedback);
+    await expect(executor.execute('画一个正方形')).resolves.toMatchObject({
+      status: 'success',
+    });
+    expect(
+      useDiagramStore.getState().diagram.nodes.find((node) => node.label === '正方形'),
+    ).toMatchObject({
+      size: { width: 150, height: 150 },
+      style: { borderRadius: 0 },
+    });
+  });
+
+  it('creates multiple generic shapes atomically from one command', async () => {
+    const executor = createSimpleCommandExecutor(speechFeedback);
+    const before = useDiagramStore.getState().diagram.nodes.length;
+
+    await expect(executor.execute('画一个正方形和三角形')).resolves.toMatchObject({
+      status: 'success',
+      intent: 'create_node',
+    });
+
+    expect(useDiagramStore.getState().diagram.nodes).toHaveLength(before + 2);
+    expect(useDiagramStore.getState().past).toHaveLength(1);
+    expect(useDiagramStore.getState().history[0]?.description).toContain('2');
+  });
+
+  it('duplicates and resizes a referenced object locally', async () => {
+    const executor = createSimpleCommandExecutor(speechFeedback);
+
+    await expect(executor.execute('把登录页放大')).resolves.toMatchObject({
+      status: 'success',
+      intent: 'resize_node',
+    });
+    expect(
+      useDiagramStore.getState().diagram.nodes.find((node) => node.id === 'login-page')
+        ?.size,
+    ).toEqual({ width: 225, height: 80 });
+
+    await expect(executor.execute('把登录页设置为宽300高180')).resolves.toMatchObject({
+      status: 'success',
+      intent: 'resize_node',
+    });
+    expect(
+      useDiagramStore.getState().diagram.nodes.find((node) => node.id === 'login-page')
+        ?.size,
+    ).toEqual({ width: 300, height: 180 });
+
+    await expect(executor.execute('复制登录页')).resolves.toMatchObject({
+      status: 'success',
+      intent: 'duplicate_node',
+    });
+    expect(
+      useDiagramStore
+        .getState()
+        .diagram.nodes.some((node) => node.label === '进入登录页副本'),
+    ).toBe(true);
+  });
+
   it('renames, deletes and removes edges through Simple Path', async () => {
     const executor = createSimpleCommandExecutor(speechFeedback);
 

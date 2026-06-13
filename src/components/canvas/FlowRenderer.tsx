@@ -2,10 +2,11 @@ import {
   Background,
   BackgroundVariant,
   ReactFlow,
+  type EdgeTypes,
   type NodeTypes,
   type ReactFlowInstance,
 } from '@xyflow/react';
-import { forwardRef, useImperativeHandle, useMemo, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
 
 import type { Diagram } from '../../core/diagram/diagramTypes';
 import { logModuleError } from '../../utils/logger';
@@ -27,6 +28,7 @@ import {
   type ReactFlowNode,
 } from './canvasTypes';
 import styles from './FlowRenderer.module.css';
+import { NumberedEdge } from './NumberedEdge';
 import { READ_ONLY_FLOW_PROPS } from './readOnlyFlowConfig';
 
 export type CanvasViewportApi = {
@@ -52,13 +54,42 @@ const nodeTypes: NodeTypes = {
   group: GroupNode,
 };
 
+const edgeTypes: EdgeTypes = {
+  numbered: NumberedEdge,
+};
+
 export const FlowRenderer = forwardRef<CanvasViewportApi, FlowRendererProps>(
   function FlowRenderer({ diagram }, ref) {
+    const [renderDiagram, setRenderDiagram] = useState(diagram);
     const [instance, setInstance] = useState<ReactFlowInstance<
       ReactFlowNode,
       ReactFlowEdge
     > | null>(null);
-    const flowElements = useMemo(() => diagramToReactFlow(diagram), [diagram]);
+    const flowElements = useMemo(
+      () => diagramToReactFlow(renderDiagram),
+      [renderDiagram],
+    );
+
+    useEffect(() => {
+      let active = true;
+      setRenderDiagram(diagram);
+      void import('../../core/layout/elkCleanLayout')
+        .then(({ applyElkCleanAutoLayout }) => applyElkCleanAutoLayout(diagram))
+        .then((result) => {
+          if (active) setRenderDiagram(result.diagram);
+        })
+        .catch((error: unknown) => {
+          logModuleError(
+            'CleanAutoLayout',
+            'elk_layout_failed',
+            diagram.id,
+            error instanceof Error ? error.message : String(error),
+          );
+        });
+      return () => {
+        active = false;
+      };
+    }, [diagram]);
 
     useImperativeHandle(
       ref,
@@ -87,6 +118,7 @@ export const FlowRenderer = forwardRef<CanvasViewportApi, FlowRendererProps>(
           nodes={flowElements.nodes}
           edges={flowElements.edges}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           onInit={(flowInstance) => {
             setInstance(flowInstance);
             void flowInstance.fitView({ padding: 0.18 });

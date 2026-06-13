@@ -97,8 +97,22 @@ export function createVoiceController({
         publishTasks();
         suppressFeedback = !utteranceEnded;
         try {
-          await controller.handleFinalTranscript(task.text);
-          task.status = 'completed';
+          const result = await controller.handleFinalTranscript(task.text);
+          if (result.status === 'success' && isCanvasMutationTask(task)) {
+            task.status = 'verifying';
+            publishTasks();
+            await Promise.resolve();
+          }
+          task.status =
+            result.status === 'clarification'
+              ? 'needs_clarification'
+              : useProposalStore.getState().proposal
+                ? 'awaiting_confirmation'
+                : result.status === 'success'
+                  ? 'completed'
+                  : result.status === 'ignored'
+                    ? 'no_change'
+                    : 'failed';
         } catch {
           task.status = 'failed';
         } finally {
@@ -220,11 +234,7 @@ export function createVoiceController({
       const hasPendingClarification = Boolean(
         pendingSimple || agentClarifying || workflowClarifying,
       );
-      if (
-        route.route === 'unknown' &&
-        !hasPendingClarification &&
-        aiProvider.mode === 'real'
-      ) {
+      if (route.route === 'unknown' && !hasPendingClarification) {
         route = {
           ...route,
           route: 'agent',
@@ -282,10 +292,7 @@ export function createVoiceController({
       } else if (route.route === 'agent' && route.agentIntent) {
         result = await agentExecutor.execute(executionText, route.agentIntent);
       } else {
-        const message =
-          aiProvider.mode === 'mock'
-            ? '本地语音校准后仍没有识别到可执行命令，请换一种说法'
-            : '本地语音校准后仍无法确定命令，请换一种说法';
+        const message = '本地语音校准后仍无法确定命令，请换一种说法';
         useCommandStore.getState().setLastMessage(message);
         void speechFeedback.speak(message);
         result = { status: 'ignored', message };
@@ -300,6 +307,7 @@ export function createVoiceController({
           shouldListen ? (voice.commandPaused ? 'paused' : 'listening') : 'idle',
         );
       }
+      return result;
     },
     pauseForFeedback() {
       if (!shouldListen) return;
@@ -314,4 +322,19 @@ export function createVoiceController({
     },
   };
   return controller;
+}
+
+function isCanvasMutationTask(task: VoiceTask): boolean {
+  if (task.route.route === 'simple' || task.route.route === 'agent') return true;
+  if (task.route.route === 'workflow') {
+    return !['save_version', 'compare_version', 'focus_node'].includes(
+      task.route.workflowIntent ?? '',
+    );
+  }
+  return (
+    task.route.route === 'fast' &&
+    ['layout_top_down', 'layout_left_to_right', 'apply_layout', 'confirm'].includes(
+      task.route.fastCommand ?? '',
+    )
+  );
 }

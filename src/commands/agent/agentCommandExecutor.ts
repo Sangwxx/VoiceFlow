@@ -11,12 +11,39 @@ export function createAgentCommandExecutor(
   provider: AiProvider,
   speechFeedback: SpeechFeedbackService,
 ) {
-  async function request(originalCommand: string, intent: AgentIntent) {
+  let inFlight: { key: string; promise: Promise<FastCommandExecutionResult> } | undefined;
+
+  function request(
+    originalCommand: string,
+    intent: AgentIntent,
+  ): Promise<FastCommandExecutionResult> {
+    const key = `${intent}:${originalCommand.trim()}`;
+    if (inFlight?.key === key) return inFlight.promise;
+    const promise = runRequest(originalCommand, intent).finally(() => {
+      if (inFlight?.key === key) inFlight = undefined;
+    });
+    inFlight = { key, promise };
+    return promise;
+  }
+
+  async function runRequest(
+    originalCommand: string,
+    intent: AgentIntent,
+  ): Promise<FastCommandExecutionResult> {
     const current = useAgentStore.getState();
-    current.controller?.abort();
+    if (
+      current.controller &&
+      (current.originalCommand !== originalCommand || current.intent !== intent)
+    ) {
+      current.controller.abort();
+    }
     const controller = new AbortController();
     const taskId = `agent-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const timeout = window.setTimeout(() => controller.abort(), 20_000);
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 120_000);
     useAgentStore.getState().setStateForTask({
       status: 'planning',
       providerMode: provider.mode,
@@ -34,23 +61,44 @@ export function createAgentCommandExecutor(
     try {
       const state = useAgentStore.getState();
       const diagram = useDiagramStore.getState().diagram;
-      const output = await provider.complete(
-        {
-          intent,
-          originalCommand,
-          conversation: state.conversation,
-          currentDiagram: intent === 'modify_diagram' ? diagram : undefined,
-          recentCommands: useCommandStore
-            .getState()
-            .executionLog.slice(0, 5)
-            .map((log) => log.rawText),
-        },
-        { signal: controller.signal },
-      );
+      const agentRequest = {
+        intent,
+        originalCommand,
+        conversation: state.conversation,
+        currentDiagram: intent === 'modify_diagram' ? diagram : undefined,
+        recentCommands: useCommandStore
+          .getState()
+          .executionLog.slice(0, 5)
+          .map((log) => log.rawText),
+      };
+      const output = await provider.complete(agentRequest, { signal: controller.signal });
       if (useAgentStore.getState().taskId !== taskId) {
         return { status: 'ignored', message: 'AI 请求已被替换' } as const;
       }
-      const result = normalizeAgentResult(output, diagram);
+      let result;
+      try {
+        result = normalizeAgentResult(output, diagram);
+      } catch (normalizationError) {
+        const repairedOutput = await provider.complete(
+          {
+            ...agentRequest,
+            conversation: [
+              ...state.conversation,
+              { role: 'assistant', content: String(output) },
+              {
+                role: 'user',
+                content: `上一条输出无法执行：${
+                  normalizationError instanceof Error
+                    ? normalizationError.message
+                    : String(normalizationError)
+                }。请只返回修正后的合法 JSON。`,
+              },
+            ],
+          },
+          { signal: controller.signal },
+        );
+        result = normalizeAgentResult(repairedOutput, diagram);
+      }
       if (result.kind === 'clarification') {
         useAgentStore.getState().setStateForTask({
           status: 'clarifying',
@@ -94,12 +142,14 @@ export function createAgentCommandExecutor(
       void speechFeedback.speak(message);
       return { status: 'success', message } as const;
     } catch (error) {
-      const cancelled = controller.signal.aborted;
-      const message = cancelled
-        ? 'AI 请求已取消'
-        : error instanceof Error
-          ? error.message
-          : 'AI 图表生成失败';
+      const cancelled = controller.signal.aborted && !timedOut;
+      const message = timedOut
+        ? 'AI 请求超时，请重试或简化描述'
+        : cancelled
+          ? 'AI 请求已取消'
+          : error instanceof Error
+            ? error.message
+            : 'AI 图表生成失败';
       useAgentStore.getState().setStateForTask({
         status: cancelled ? 'cancelled' : 'error',
         previewDiagram: null,

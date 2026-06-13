@@ -46,7 +46,7 @@ export type AgentPlanResult =
     };
 
 export interface AiProvider {
-  readonly mode: 'mock' | 'real';
+  readonly mode: 'real' | 'unconfigured';
   readonly model: string;
   complete(request: AgentRequest, options?: { signal?: AbortSignal }): Promise<unknown>;
 }

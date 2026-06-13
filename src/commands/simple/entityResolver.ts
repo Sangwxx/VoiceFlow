@@ -1,4 +1,5 @@
 import type { Diagram, DiagramEdge, DiagramNode } from '../../core/diagram/diagramTypes';
+import { resolveTemporaryObjectReference } from '../../core/diagram/temporaryObjectReferences';
 import { normalizeText } from '../../utils/text';
 import type { EdgeResolveResult, NodeResolveResult } from './simpleTypes';
 
@@ -13,6 +14,11 @@ export function resolveNode(
   query: string,
   recentTargetId?: string,
 ): NodeResolveResult {
+  const reference = resolveTemporaryObjectReference(diagram, query);
+  if (reference?.kind === 'node') {
+    const node = diagram.nodes.find((item) => item.id === reference.id);
+    if (node) return { status: 'found', item: node, confidence: 1 };
+  }
   return resolveItems(diagram.nodes, query, recentTargetId, (node) => node.label);
 }
 
@@ -21,6 +27,11 @@ export function resolveEdge(
   query: string,
   recentTargetId?: string,
 ): EdgeResolveResult {
+  const reference = resolveTemporaryObjectReference(diagram, query);
+  if (reference?.kind === 'edge') {
+    const edge = diagram.edges.find((item) => item.id === reference.id);
+    if (edge) return { status: 'found', item: edge, confidence: 1 };
+  }
   const normalized = normalizeText(query);
   const aliasTerms = Object.entries(EDGE_ALIASES).find(([key]) =>
     normalized.includes(key),

@@ -20,6 +20,7 @@ describe('diagramToReactFlow', () => {
       data: {
         label: '是否已登录？',
         nodeType: 'decision',
+        temporaryNumber: expect.any(Number),
       },
     });
     expect(decision?.position.x).toBeTypeOf('number');
@@ -33,12 +34,14 @@ describe('diagramToReactFlow', () => {
     const highlighted = result.edges.find((edge) => edge.id === 'e-check-home');
 
     expect(dashed).toMatchObject({
+      type: 'numbered',
       label: '否',
       selectable: false,
       focusable: false,
       reconnectable: false,
       style: { strokeDasharray: '7 5' },
       markerEnd: { type: MarkerType.ArrowClosed },
+      data: { temporaryNumber: expect.any(Number) },
     });
     expect(highlighted?.style).toMatchObject({
       stroke: '#2563eb',

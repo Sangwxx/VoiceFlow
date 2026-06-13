@@ -9,7 +9,7 @@ import type {
 
 export type AgentStoreState = {
   status: AgentStatus;
-  providerMode: 'mock' | 'real';
+  providerMode: 'real' | 'unconfigured';
   model: string;
   originalCommand: string;
   intent: AgentIntent | null;
@@ -27,7 +27,7 @@ export type AgentStoreState = {
 
 const initial = {
   status: 'idle' as AgentStatus,
-  providerMode: 'mock' as const,
+  providerMode: 'unconfigured' as const,
   model: '',
   originalCommand: '',
   intent: null,

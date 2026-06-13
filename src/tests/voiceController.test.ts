@@ -10,7 +10,7 @@ import { useProposalStore } from '../stores/proposalStore';
 import { useVersionStore } from '../stores/versionStore';
 import { useWorkflowStore } from '../stores/workflowStore';
 import { useCanvasViewStore } from '../stores/canvasViewStore';
-import { MockAiProvider } from '../commands/agent/aiProviders';
+import { UnconfiguredAiProvider } from '../commands/agent/aiProviders';
 import { useAgentStore } from '../stores/agentStore';
 
 const speechFeedback: SpeechFeedbackService = {
@@ -22,7 +22,7 @@ function createTestController(provider: MockVoiceProvider) {
   return createVoiceController({
     provider,
     speechFeedback,
-    aiProvider: new MockAiProvider(),
+    aiProvider: new UnconfiguredAiProvider(),
   });
 }
 
@@ -161,6 +161,9 @@ describe('voiceController integration', () => {
     await vi.waitFor(() => {
       expect(useProposalStore.getState().proposal?.source).toBe('report_mode');
     });
+    await vi.waitFor(() => {
+      expect(useVoiceStore.getState().taskQueue[0].status).toBe('awaiting_confirmation');
+    });
     expect(useDiagramStore.getState().diagram.layout.direction).toBe('top_down');
 
     controller.startListening();
@@ -175,6 +178,17 @@ describe('voiceController integration', () => {
       expect(useProposalStore.getState().proposal).toBeNull();
       expect(useDiagramStore.getState().diagram.layout.direction).toBe('left_to_right');
     });
+  });
+
+  it('marks a repeated canvas modification as no_change instead of completed', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+    controller.startListening();
+    provider.emitInterim('纵向布局，然后继续');
+    await vi.waitFor(() => {
+      expect(useVoiceStore.getState().taskQueue[0]?.status).toBe('no_change');
+    });
+    expect(useDiagramStore.getState().past).toHaveLength(0);
   });
 
   it('ignores recognition results that arrive after listening stops', async () => {
@@ -241,12 +255,24 @@ describe('voiceController integration', () => {
     await controller.handleFinalTranscript('确认');
     expect(useProposalStore.getState().proposal).toBeNull();
     expect(useDiagramStore.getState().diagram.theme.name).toBe('report_clean');
-    expect(useVersionStore.getState().versions[0].name).toBe('汇报美化前');
+    expect(useVersionStore.getState().versions).toHaveLength(0);
   });
 
   it('uses local calibration before giving up on an unknown transcript', async () => {
     const provider = new MockVoiceProvider();
-    const controller = createTestController(provider);
+    const complete = vi.fn().mockResolvedValue({
+      kind: 'diagram',
+      summary: '强化学习流程',
+      diagram: {
+        ...structuredClone(useDiagramStore.getState().diagram),
+        title: '强化学习学习流程',
+      },
+    });
+    const controller = createVoiceController({
+      provider,
+      speechFeedback,
+      aiProvider: { mode: 'real', model: 'test-model', complete },
+    });
     await controller.handleFinalTranscript('声成一张强化学西的流成图');
     expect(useVoiceStore.getState().correctedTranscript).toBe('生成一张强化学习的流程图');
     expect(useProposalStore.getState().proposal?.diagram.title).toBe('强化学习学习流程');

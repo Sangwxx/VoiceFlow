@@ -29,6 +29,12 @@ export function cloneDiagram(diagram: Diagram): Diagram {
     edges: diagram.edges.map((edge) => ({
       ...edge,
       style: edge.style ? { ...edge.style } : undefined,
+      routing: edge.routing
+        ? {
+            ...edge.routing,
+            points: edge.routing.points.map((point) => ({ ...point })),
+          }
+        : undefined,
     })),
     groups: diagram.groups?.map((group) => ({
       ...group,

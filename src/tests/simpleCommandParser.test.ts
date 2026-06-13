@@ -38,4 +38,20 @@ describe('parseSimpleCommand', () => {
   it('rejects unsupported wording', () => {
     expect(parseSimpleCommand('把流程做得更好看')).toMatchObject({ status: 'invalid' });
   });
+
+  it('parses basic shapes as a fast local node operation', () => {
+    expect(parseSimpleCommand('画一个正方形')).toMatchObject({
+      status: 'ready',
+      intent: 'create_node',
+      draft: {
+        label: '正方形',
+        size: { width: 150, height: 150 },
+        style: { borderRadius: 0 },
+      },
+    });
+    expect(parseSimpleCommand('绘制一个圆形')).toMatchObject({
+      status: 'ready',
+      draft: { label: '圆形', style: { borderRadius: 999 } },
+    });
+  });
 });

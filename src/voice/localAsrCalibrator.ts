@@ -31,15 +31,6 @@ const PHONETIC_KEYS = new Map<string, string>(
   ),
 );
 
-const COMMAND_ALIAS_CATEGORIES = new Set([
-  'action',
-  'control',
-  'viewport',
-  'layout',
-  'workflow',
-  'export',
-]);
-
 export function calibrateAsrTranscript(
   text: string,
   context: { diagram: Diagram; recentCommands?: string[] },
@@ -54,7 +45,6 @@ export function calibrateAsrTranscript(
   }
 
   const entries = buildDynamicLexicon(context);
-  corrected = normalizeCommandAliases(corrected, entries, reasons);
   corrected = applyBestCandidates(corrected, entries, reasons);
 
   const changed = corrected !== original;
@@ -95,27 +85,6 @@ export function buildDynamicLexicon(context: {
     if (!existing || existing.weight < item.weight) byTerm.set(normalized, item);
   }
   return [...byTerm.values()];
-}
-
-function normalizeCommandAliases(
-  text: string,
-  entries: LexiconEntry[],
-  reasons: string[],
-): string {
-  let result = text;
-  const aliases = entries
-    .filter((entry) => COMMAND_ALIAS_CATEGORIES.has(entry.category))
-    .flatMap((entry) =>
-      (entry.aliases ?? []).map((alias) => ({ alias, term: entry.term })),
-    )
-    .sort((left, right) => right.alias.length - left.alias.length);
-
-  for (const { alias, term } of aliases) {
-    if (!result.includes(alias)) continue;
-    result = result.replaceAll(alias, term);
-    reasons.push('命令别名归一化');
-  }
-  return result;
 }
 
 function extractCommandTerms(command: string): LexiconEntry[] {

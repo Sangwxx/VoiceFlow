@@ -8,6 +8,10 @@ export type VoiceTaskStatus =
   | 'queued'
   | 'waiting_recording_end'
   | 'executing'
+  | 'verifying'
+  | 'needs_clarification'
+  | 'awaiting_confirmation'
+  | 'no_change'
   | 'completed'
   | 'failed';
 

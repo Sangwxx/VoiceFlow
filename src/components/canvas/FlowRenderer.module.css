@@ -4,9 +4,9 @@
   min-height: 420px;
   overflow: hidden;
   border: 1px solid var(--border-subtle);
-  border-radius: 20px;
+  border-radius: 24px;
   background: #fbfdff;
-  box-shadow: var(--shadow-card);
+  box-shadow: 0 16px 42px rgb(46 73 110 / 10%);
 }
 
 .canvas :global(.react-flow__pane),

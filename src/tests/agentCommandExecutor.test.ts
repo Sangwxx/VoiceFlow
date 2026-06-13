@@ -4,7 +4,7 @@ import {
   createAgentCommandExecutor,
   confirmAgentPreview,
 } from '../commands/agent/agentCommandExecutor';
-import { MockAiProvider } from '../commands/agent/aiProviders';
+import type { AiProvider } from '../commands/agent/agentTypes';
 import type { SpeechFeedbackService } from '../services/speechFeedbackService';
 import { useAgentStore } from '../stores/agentStore';
 import { useDiagramStore } from '../stores/diagramStore';
@@ -22,7 +22,10 @@ describe('agentCommandExecutor', () => {
 
   it('previews without mutating, confirms atomically and supports undo', async () => {
     const original = useDiagramStore.getState().diagram;
-    const executor = createAgentCommandExecutor(new MockAiProvider(), feedback);
+    const executor = createAgentCommandExecutor(
+      diagramProvider('architecture'),
+      feedback,
+    );
     await executor.execute(
       '画一个包含网关、服务和数据库的系统架构图',
       'create_architecture',
@@ -38,7 +41,7 @@ describe('agentCommandExecutor', () => {
   });
 
   it('enters clarification and resubmits the answer', async () => {
-    const executor = createAgentCommandExecutor(new MockAiProvider(), feedback);
+    const executor = createAgentCommandExecutor(clarificationProvider(), feedback);
     await executor.execute('画点东西', 'create_flowchart');
     expect(useAgentStore.getState().status).toBe('clarifying');
     await executor.answerClarification('用户登录流程');
@@ -67,7 +70,7 @@ describe('agentCommandExecutor', () => {
 
   it('previews contextual operations and commits them as one history entry', async () => {
     const original = useDiagramStore.getState().diagram;
-    const executor = createAgentCommandExecutor(new MockAiProvider(), feedback);
+    const executor = createAgentCommandExecutor(operationProvider(), feedback);
     await executor.execute('把失败分支改成红色虚线', 'modify_diagram');
 
     expect(useDiagramStore.getState().diagram).toEqual(original);
@@ -80,4 +83,114 @@ describe('agentCommandExecutor', () => {
         .diagram.edges.find((edge) => edge.id === 'e-success-error'),
     ).toMatchObject({ type: 'dashed', style: { stroke: '#dc2626' } });
   });
+
+  it('coalesces duplicate in-flight Agent requests instead of cancelling the first', async () => {
+    let resolveRequest: ((value: unknown) => void) | undefined;
+    const complete = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveRequest = resolve;
+        }),
+    );
+    const executor = createAgentCommandExecutor(
+      { mode: 'real', model: 'test-model', complete },
+      feedback,
+    );
+    const first = executor.execute('画一个高中数学学习流程', 'create_flowchart');
+    const second = executor.execute('画一个高中数学学习流程', 'create_flowchart');
+    expect(complete).toHaveBeenCalledTimes(1);
+    resolveRequest?.({
+      kind: 'diagram',
+      diagram: {
+        id: 'math',
+        title: '高中数学学习流程',
+        nodes: [{ id: 'learn', label: '学习', type: 'process' }],
+        edges: [],
+      },
+    });
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      expect.objectContaining({ status: 'success' }),
+      expect.objectContaining({ status: 'success' }),
+    ]);
+  });
+
+  it('retries once only when the Agent output is invalid', async () => {
+    const complete = vi
+      .fn()
+      .mockResolvedValueOnce('not-json')
+      .mockResolvedValueOnce({
+        kind: 'diagram',
+        diagram: {
+          id: 'repaired',
+          title: '修复后的图',
+          nodes: [{ id: 'step', label: '步骤', type: 'process' }],
+          edges: [],
+        },
+      });
+    const executor = createAgentCommandExecutor(
+      { mode: 'real', model: 'test-model', complete },
+      feedback,
+    );
+    await expect(
+      executor.execute('画一个学习流程', 'create_flowchart'),
+    ).resolves.toMatchObject({ status: 'success' });
+    expect(complete).toHaveBeenCalledTimes(2);
+  });
 });
+
+function diagramProvider(diagramType: 'architecture' | 'flowchart'): AiProvider {
+  return {
+    mode: 'real',
+    model: 'test-model',
+    complete: vi.fn().mockResolvedValue({
+      kind: 'diagram',
+      summary: '测试候选图',
+      diagram: {
+        id: 'generated',
+        title: '测试图',
+        diagramType,
+        nodes: [
+          { id: 'start', label: '开始', type: 'start' },
+          { id: 'end', label: '结束', type: 'end' },
+        ],
+        edges: [{ id: 'edge', from: 'start', to: 'end' }],
+      },
+    }),
+  };
+}
+
+function clarificationProvider(): AiProvider {
+  let calls = 0;
+  return {
+    mode: 'real',
+    model: 'test-model',
+    complete: vi.fn().mockImplementation(() => {
+      calls += 1;
+      return calls === 1
+        ? { kind: 'clarification', question: '请补充具体流程' }
+        : diagramProvider('flowchart').complete({
+            intent: 'create_flowchart',
+            originalCommand: '',
+            conversation: [],
+          });
+    }),
+  };
+}
+
+function operationProvider(): AiProvider {
+  return {
+    mode: 'real',
+    model: 'test-model',
+    complete: vi.fn().mockResolvedValue({
+      kind: 'operations',
+      summary: '修改失败分支',
+      operations: [
+        {
+          type: 'update_edge',
+          edgeId: 'e-success-error',
+          patch: { type: 'dashed', style: { stroke: '#dc2626' } },
+        },
+      ],
+    }),
+  };
+}

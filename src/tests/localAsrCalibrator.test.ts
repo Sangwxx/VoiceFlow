@@ -30,30 +30,8 @@ describe('localAsrCalibrator', () => {
   it('uses phonetic similarity and edit distance for domain terms', () => {
     expect(
       calibrateAsrTranscript('请重新排板', { diagram: loginFlowDiagram }).correctedText,
-    ).toBe('请自动排版');
+    ).toBe('请重新排版');
     expect(editDistance('横向布橘', '横向布局')).toBe(1);
-  });
-
-  it.each([
-    ['请从左到右', '请横向布局'],
-    ['重新排版', '自动排版'],
-    ['回到上一步', '撤销'],
-  ])('normalizes command aliases locally: %s', (input, expected) => {
-    expect(calibrateAsrTranscript(input, { diagram: loginFlowDiagram })).toMatchObject({
-      correctedText: expected,
-      changed: true,
-      confidence: 0.96,
-      reason: '命令别名归一化',
-    });
-  });
-
-  it('does not normalize ambiguous diagram vocabulary as a command alias', () => {
-    expect(
-      calibrateAsrTranscript('用户开始登录流程', { diagram: loginFlowDiagram }),
-    ).toMatchObject({
-      correctedText: '用户开始登录流程',
-      changed: false,
-    });
   });
 
   it('uses current canvas node labels as a correction dictionary', () => {

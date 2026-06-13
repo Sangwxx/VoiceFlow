@@ -28,7 +28,12 @@ describe('diagramStore', () => {
       .getState()
       .applyOperation(createApplyLayoutOperation('left_to_right'));
     useDiagramStore.getState().undo();
-    useDiagramStore.getState().applyOperation(createApplyLayoutOperation('top_down'));
+    useDiagramStore.getState().applyOperation({
+      id: 'create-after-undo',
+      type: 'create_node',
+      timestamp: '2026-06-13T12:00:00.000Z',
+      node: { id: 'after-undo', label: '新操作', type: 'process' },
+    });
 
     expect(useDiagramStore.getState().future).toHaveLength(0);
     expect(useDiagramStore.getState().redo()).toBe(false);
@@ -37,6 +42,20 @@ describe('diagramStore', () => {
   it('safely rejects undo and redo with empty history', () => {
     expect(useDiagramStore.getState().undo()).toBe(false);
     expect(useDiagramStore.getState().redo()).toBe(false);
+  });
+
+  it('does not commit or create history for an operation with no expected change', () => {
+    const before = structuredClone(useDiagramStore.getState().diagram);
+    const result = useDiagramStore.getState().applyOperation({
+      id: 'same-label',
+      type: 'update_node',
+      timestamp: '2026-06-13T12:00:00.000Z',
+      nodeId: 'start',
+      patch: { label: before.nodes.find((node) => node.id === 'start')!.label },
+    });
+    expect(result.verified).toBe(false);
+    expect(useDiagramStore.getState().diagram).toEqual(before);
+    expect(useDiagramStore.getState().past).toHaveLength(0);
   });
 
   it('replaces a complete diagram as one undoable history entry', () => {

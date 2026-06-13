@@ -44,6 +44,16 @@ export function createFastCommandExecutor({
       return { status: 'ignored', message: '命令执行已暂停，请说继续或取消' };
     }
 
+    if (command === 'undo' && useDiagramStore.getState().past.length === 0) {
+      return noChange('暂无可撤销操作');
+    }
+    if (command === 'redo' && useDiagramStore.getState().future.length === 0) {
+      return noChange('暂无可重做操作');
+    }
+    if (command === 'confirm' && !useProposalStore.getState().proposal) {
+      return noChange('当前没有待确认的图表');
+    }
+
     try {
       let message = '';
       switch (command) {
@@ -78,19 +88,32 @@ export function createFastCommandExecutor({
           break;
         }
         case 'layout_top_down':
-          useDiagramStore
-            .getState()
-            .applyOperation(createApplyLayoutOperation('top_down'));
+          if (
+            !useDiagramStore
+              .getState()
+              .applyOperation(createApplyLayoutOperation('top_down')).verified
+          ) {
+            return noChange('画布已经是纵向布局');
+          }
           message = '已切换为纵向布局';
           break;
         case 'layout_left_to_right':
-          useDiagramStore
-            .getState()
-            .applyOperation(createApplyLayoutOperation('left_to_right'));
+          if (
+            !useDiagramStore
+              .getState()
+              .applyOperation(createApplyLayoutOperation('left_to_right')).verified
+          ) {
+            return noChange('画布已经是横向布局');
+          }
           message = '已切换为横向布局';
           break;
         case 'apply_layout':
-          useDiagramStore.getState().applyOperation(createApplyLayoutOperation());
+          if (
+            !useDiagramStore.getState().applyOperation(createApplyLayoutOperation())
+              .verified
+          ) {
+            return noChange('当前画布已经完成自动排版');
+          }
           message = '已自动排版';
           break;
         case 'pause':
@@ -153,6 +176,11 @@ export function createFastCommandExecutor({
       if (command.startsWith('export_')) useExportStore.getState().setError(message);
       useCommandStore.getState().setLastMessage(message);
       return { status: 'error', message };
+    }
+    function noChange(message: string): FastCommandExecutionResult {
+      useCommandStore.getState().setLastMessage(message);
+      void speechFeedback.speak(message);
+      return { status: 'ignored', message };
     }
   };
 }

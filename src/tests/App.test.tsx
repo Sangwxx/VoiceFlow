@@ -3,36 +3,32 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { App } from '../app/App';
+import type { ClarificationRequest } from '../commands/simple/simpleTypes';
 import { useCommandStore } from '../stores/commandStore';
 import { useDiagramStore } from '../stores/diagramStore';
+import { useVersionStore } from '../stores/versionStore';
 import { useVoiceStore } from '../stores/voiceStore';
-import type { ClarificationRequest } from '../commands/simple/simpleTypes';
 
 describe('competition app', () => {
   beforeEach(() => {
     useDiagramStore.getState().reset();
     useVoiceStore.getState().reset();
     useCommandStore.getState().reset();
+    useVersionStore.getState().clear();
   });
 
-  afterEach(() => {
-    useVoiceStore.getState().reset();
-  });
+  afterEach(() => useVoiceStore.getState().reset());
 
-  it('shows voice, decision metrics, command history and transcript surfaces', async () => {
+  it('shows the one-quarter workbench and canvas information architecture', () => {
     render(<App />);
 
-    expect(screen.getByText('AI 语音绘图')).toBeInTheDocument();
-    expect(screen.getByText('Simple Path 示例')).toBeInTheDocument();
-    expect(screen.getByText('智能决策指标')).toBeInTheDocument();
-    expect(
-      screen.getByText('分层低延迟路由 · 上下文消歧 · 安全预览确认'),
-    ).toBeInTheDocument();
-    expect(screen.getByText('历史状态')).toBeInTheDocument();
-    expect(screen.getByText('最近命令')).toBeInTheDocument();
-    expect(screen.getByText('实时字幕')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '开始语音输入' })).toBeInTheDocument();
-    expect(screen.getAllByText('等待启动')).toHaveLength(2);
+    expect(screen.getByRole('complementary', { name: '语音工作区' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: '画布区' })).toBeInTheDocument();
+    expect(screen.getByText('实时文字')).toBeInTheDocument();
+    expect(screen.getByText('任务列表')).toBeInTheDocument();
+    expect(screen.getByText('系统反问')).toBeInTheDocument();
+    expect(screen.getByText('版本管理')).toBeInTheDocument();
+    expect(screen.getByText('仅收录明确语音保存的版本')).toBeInTheDocument();
   });
 
   it('starts and stops microphone input explicitly', async () => {
@@ -45,7 +41,6 @@ describe('competition app', () => {
       'aria-pressed',
       'true',
     );
-
     await user.click(screen.getByRole('button', { name: '停止语音输入' }));
     expect(screen.getByRole('button', { name: '开始语音输入' })).toHaveAttribute(
       'aria-pressed',
@@ -53,7 +48,7 @@ describe('competition app', () => {
     );
   });
 
-  it('shows pending clarification candidates', () => {
+  it('shows clarification inside the current-task question area', () => {
     const request: ClarificationRequest = {
       id: 'clarification-1',
       originalCommand: '把失败分支改成红色虚线',
@@ -71,13 +66,62 @@ describe('competition app', () => {
       },
     };
     useCommandStore.getState().setPendingClarification(request);
-
     render(<App />);
 
-    expect(screen.getByText('视觉化消歧')).toBeInTheDocument();
-    expect(screen.getByText('原始语音')).toBeInTheDocument();
-    expect(screen.getByText(/把失败分支改成红色虚线/)).toBeInTheDocument();
+    expect(screen.getByText('需要你的回答')).toBeInTheDocument();
     expect(screen.getByText('登录成功 → 错误提示（失败）')).toBeInTheDocument();
-    expect(screen.getByText('2')).toBeInTheDocument();
+  });
+
+  it('shows only explicitly saved manual versions', () => {
+    useVersionStore
+      .getState()
+      .saveVersion(
+        '明确收录版本',
+        'manual',
+        'voice_save',
+        useDiagramStore.getState().diagram,
+      );
+    render(<App />);
+    expect(screen.getByText('明确收录版本')).toBeInTheDocument();
+  });
+
+  it('opens the categorized tool manual from the canvas header', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    expect(
+      screen.getByText('说“保存当前版本叫初始流程”，需要时说“恢复初始流程”。'),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '打开工具手册' }));
+    expect(screen.getByRole('dialog', { name: '工具手册' })).toBeInTheDocument();
+    expect(screen.getByText('增删改图形')).toBeInTheDocument();
+    expect(screen.getByText('“删除物体 3”')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '关闭工具手册' }));
+    expect(screen.queryByRole('dialog', { name: '工具手册' })).not.toBeInTheDocument();
+  });
+
+  it('shows task status and confidence in the ordered scrolling list', () => {
+    useVoiceStore.getState().setTaskQueue([
+      {
+        id: 'task-1',
+        sequence: 1,
+        text: '横向布局',
+        source: 'final',
+        readiness: 'immediate',
+        status: 'executing',
+        route: {
+          route: 'fast',
+          confidence: 0.92,
+          rawText: '横向布局',
+          normalizedText: '横向布局',
+          fastCommand: 'layout_left_to_right',
+        },
+      },
+    ]);
+    render(<App />);
+    expect(screen.getByText('横向布局')).toBeInTheDocument();
+    expect(screen.getByText('正在执行')).toBeInTheDocument();
+    expect(screen.getByText('92%')).toBeInTheDocument();
+    expect(screen.getByText('针对任务：横向布局')).toBeInTheDocument();
   });
 });

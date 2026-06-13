@@ -58,6 +58,33 @@ describe('routeCommand', () => {
     });
   });
 
+  it('keeps basic shapes local and routes broad learning flows to Agent', () => {
+    expect(routeCommand('画一个正方形')).toMatchObject({
+      route: 'simple',
+      simpleIntent: 'create_node',
+    });
+    expect(routeCommand('画两个圆形和一个三角形')).toMatchObject({
+      route: 'simple',
+      simpleIntent: 'create_node',
+    });
+    expect(routeCommand('复制物体1')).toMatchObject({
+      route: 'simple',
+      simpleIntent: 'duplicate_node',
+    });
+    expect(routeCommand('把物体2放大')).toMatchObject({
+      route: 'simple',
+      simpleIntent: 'resize_node',
+    });
+    expect(routeCommand('画一个高中数据的学习流程')).toMatchObject({
+      route: 'agent',
+      agentIntent: 'create_flowchart',
+    });
+    expect(routeCommand('帮我梳理一个机器学习路径')).toMatchObject({
+      route: 'agent',
+      agentIntent: 'create_flowchart',
+    });
+  });
+
   it('routes stage 5 workflow and export commands', () => {
     expect(routeCommand('整理成适合汇报的版本')).toMatchObject({
       route: 'workflow',

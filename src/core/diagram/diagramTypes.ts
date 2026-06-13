@@ -1,4 +1,9 @@
-export const DIAGRAM_TYPES = ['flowchart', 'architecture'] as const;
+export const DIAGRAM_TYPES = [
+  'flowchart',
+  'architecture',
+  'organization',
+  'dataflow',
+] as const;
 export type DiagramType = (typeof DIAGRAM_TYPES)[number];
 
 export const NODE_TYPES = [
@@ -46,6 +51,7 @@ export type NodeStyle = {
   borderRadius?: number;
   fontSize?: number;
   fontWeight?: number | string;
+  clipPath?: string;
 };
 
 export type EdgeStyle = {
@@ -74,6 +80,16 @@ export type DiagramEdge = {
   type?: DiagramEdgeType;
   style?: EdgeStyle;
   locked?: boolean;
+  routing?: EdgeRouting;
+};
+
+export type EdgeSide = 'top' | 'right' | 'bottom' | 'left';
+
+export type EdgeRouting = {
+  sourceSide: EdgeSide;
+  targetSide: EdgeSide;
+  points: Position[];
+  kind: 'forward' | 'branch' | 'back';
 };
 
 export type DiagramGroup = {

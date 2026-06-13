@@ -189,8 +189,38 @@ export function validateDiagram(input: unknown): DiagramValidationResult {
   if (input.groups !== undefined) {
     if (!Array.isArray(input.groups)) {
       addError('invalid_type', 'groups', 'groups 必须是数组。');
-    } else if (input.groups.length > 0) {
-      addError('unsupported', 'groups', '阶段 1 暂不支持非空分组。');
+    } else {
+      const groupIds = new Set<string>();
+      input.groups.forEach((group, index) => {
+        const path = `groups[${index}]`;
+        if (!isRecord(group)) {
+          addError('invalid_type', path, '分组必须是对象。');
+          return;
+        }
+        if (!isNonEmptyString(group.id)) {
+          addError('required', `${path}.id`, '分组 ID 不能为空。');
+        } else if (groupIds.has(group.id)) {
+          addError('duplicate_id', `${path}.id`, '分组 ID 重复。');
+        } else {
+          groupIds.add(group.id);
+        }
+        if (!isNonEmptyString(group.label)) {
+          addError('required', `${path}.label`, '分组名称不能为空。');
+        }
+        if (!Array.isArray(group.nodeIds)) {
+          addError('invalid_type', `${path}.nodeIds`, '分组节点必须是数组。');
+        } else {
+          group.nodeIds.forEach((nodeId, nodeIndex) => {
+            if (!isNonEmptyString(nodeId) || !nodeIds.has(nodeId)) {
+              addError(
+                'invalid_reference',
+                `${path}.nodeIds[${nodeIndex}]`,
+                '分组引用了不存在的节点。',
+              );
+            }
+          });
+        }
+      });
     }
   }
 

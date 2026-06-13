@@ -7,6 +7,11 @@ import {
   executeOperations,
 } from '../core/operations/operationExecutor';
 import type { DiagramOperation } from '../core/operations/operationTypes';
+import {
+  diagramsHaveMeaningfulDifference,
+  verifyOperationResult,
+  type OperationVerificationResult,
+} from '../core/operations/operationResultVerifier';
 import { defaultLayoutEngine } from '../core/layout/layoutEngine';
 import { loginFlowDiagram } from '../mock/loginFlowDiagram';
 
@@ -24,9 +29,12 @@ export type DiagramStoreState = {
   history: DiagramHistoryEntry[];
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
-  applyOperation: (operation: DiagramOperation) => void;
-  applyOperations: (operations: DiagramOperation[], description: string) => void;
-  replaceDiagram: (diagram: Diagram, description: string) => void;
+  applyOperation: (operation: DiagramOperation) => OperationVerificationResult;
+  applyOperations: (
+    operations: DiagramOperation[],
+    description: string,
+  ) => OperationVerificationResult;
+  replaceDiagram: (diagram: Diagram, description: string) => OperationVerificationResult;
   undo: () => boolean;
   redo: () => boolean;
   reset: (diagram?: Diagram) => void;
@@ -64,6 +72,8 @@ export const useDiagramStore = create<DiagramStoreState>((set, get) => ({
   applyOperation: (operation) => {
     const { diagram, past, history } = get();
     const next = executeOperation(diagram, operation);
+    const verification = verifyOperationResult(diagram, next, operation);
+    if (!verification.verified) return verification;
     set({
       diagram: next,
       past: [...past, cloneDiagram(diagram)],
@@ -79,12 +89,17 @@ export const useDiagramStore = create<DiagramStoreState>((set, get) => ({
         ...history,
       ].slice(0, 30),
     });
+    return verification;
   },
 
   applyOperations: (operations, description) => {
-    if (operations.length === 0) return;
+    if (operations.length === 0)
+      return { verified: false, changed: false, message: '没有可执行操作' };
     const { diagram, past, history } = get();
     const next = executeOperations(diagram, operations);
+    const changed = diagramsHaveMeaningfulDifference(diagram, next);
+    if (!changed)
+      return { verified: false, changed: false, message: '批量操作未产生画布变化' };
     set({
       diagram: next,
       past: [...past, cloneDiagram(diagram)],
@@ -96,10 +111,13 @@ export const useDiagramStore = create<DiagramStoreState>((set, get) => ({
         ...history,
       ].slice(0, 30),
     });
+    return { verified: true, changed: true, message: '本地批量执行确认通过' };
   },
 
   replaceDiagram: (nextDiagram, description) => {
     const { diagram, past, history } = get();
+    if (!diagramsHaveMeaningfulDifference(diagram, nextDiagram))
+      return { verified: false, changed: false, message: '候选图与当前图相同' };
     set({
       diagram: cloneDiagram(nextDiagram),
       past: [...past, cloneDiagram(diagram)],
@@ -108,6 +126,7 @@ export const useDiagramStore = create<DiagramStoreState>((set, get) => ({
       selectedEdgeId: null,
       history: [historyEntry('operation', description), ...history].slice(0, 30),
     });
+    return { verified: true, changed: true, message: '本地图表替换确认通过' };
   },
 
   undo: () => {

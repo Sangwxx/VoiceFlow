@@ -4,7 +4,6 @@ import type { Diagram } from '../core/diagram/diagramTypes';
 import { cloneDiagram } from '../core/diagram/diagramUtils';
 import type { DiagramOperation } from '../core/operations/operationTypes';
 import { useDiagramStore } from './diagramStore';
-import { useVersionStore } from './versionStore';
 
 export type ProposalSource = 'agent' | 'report_mode' | 'version_restore' | 'demo_scene';
 
@@ -26,12 +25,6 @@ export type ProposalStore = {
   cancel: () => void;
 };
 
-const SNAPSHOT_NAMES: Partial<Record<ProposalSource, string>> = {
-  report_mode: '汇报美化前',
-  version_restore: '版本恢复前',
-  demo_scene: '载入演示场景前',
-};
-
 export const useProposalStore = create<ProposalStore>((set, get) => ({
   proposal: null,
   setProposal: (proposal) =>
@@ -39,18 +32,12 @@ export const useProposalStore = create<ProposalStore>((set, get) => ({
   confirm: () => {
     const proposal = get().proposal;
     if (!proposal) return false;
-    const current = useDiagramStore.getState().diagram;
-    const snapshotName = SNAPSHOT_NAMES[proposal.source];
-    if (snapshotName) {
-      useVersionStore
-        .getState()
-        .saveVersion(snapshotName, 'automatic', proposal.source, current);
-    }
-    if (proposal.operations?.length) {
-      useDiagramStore.getState().applyOperations(proposal.operations, proposal.title);
-    } else {
-      useDiagramStore.getState().replaceDiagram(proposal.diagram, proposal.title);
-    }
+    const verified = proposal.operations?.length
+      ? useDiagramStore.getState().applyOperations(proposal.operations, proposal.title)
+          .verified
+      : useDiagramStore.getState().replaceDiagram(proposal.diagram, proposal.title)
+          .verified;
+    if (!verified) return false;
     set({ proposal: null });
     return true;
   },

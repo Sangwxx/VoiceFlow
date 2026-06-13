@@ -7,6 +7,7 @@ import type {
   NodeStyle,
 } from '../../core/diagram/diagramTypes';
 import type { DiagramOperation } from '../../core/operations/operationTypes';
+import { getNodeSize } from '../../core/diagram/diagramUtils';
 import type { SpeechFeedbackService } from '../../services/speechFeedbackService';
 import { useCommandStore } from '../../stores/commandStore';
 import { useDiagramStore } from '../../stores/diagramStore';
@@ -19,6 +20,7 @@ import {
   resolveNode,
 } from './entityResolver';
 import { parseSimpleCommand } from './simpleCommandParser';
+import { matchGenericDrawingActions } from './genericDrawingMatcher';
 import type {
   ClarificationCandidate,
   ClarificationRequest,
@@ -45,10 +47,54 @@ const EDGE_COLORS: Record<string, string> = {
 
 export function createSimpleCommandExecutor(speechFeedback: SpeechFeedbackService) {
   async function execute(text: string): Promise<SimpleExecutionResult> {
+    const genericDrafts = matchGenericDrawingActions(text);
+    if (genericDrafts.length > 1) return executeGenericBatch(genericDrafts);
     const parsed = parseSimpleCommand(text);
     if (parsed.status !== 'ready')
       return finish({ status: 'error', message: parsed.message });
     return executeDraft(parsed.draft, text);
+  }
+
+  async function executeGenericBatch(
+    drafts: SimpleOperationDraft[],
+  ): Promise<SimpleExecutionResult> {
+    const createDrafts = drafts.filter(
+      (draft): draft is Extract<SimpleOperationDraft, { intent: 'create_node' }> =>
+        draft.intent === 'create_node',
+    );
+    const operations = createDrafts.map((draft) =>
+      createNodeOperation(
+        draft.label,
+        draft.nodeType,
+        `创建图形“${draft.label}”`,
+        draft.size,
+        draft.style,
+      ),
+    );
+    const verification = useDiagramStore
+      .getState()
+      .applyOperations(operations, `批量创建 ${operations.length} 个图形`);
+    if (!verification.verified) {
+      return finish({
+        status: 'ignored',
+        intent: 'create_node',
+        message: verification.message,
+      });
+    }
+    const lastOperation = operations.at(-1);
+    const lastNode =
+      lastOperation?.type === 'create_node' ? lastOperation.node : undefined;
+    if (lastNode && lastOperation) {
+      useCommandStore.getState().setLastTarget(nodeTarget(lastNode));
+      useCommandStore.getState().setLastOperation(lastOperation);
+    }
+    return finish({
+      status: 'success',
+      intent: 'create_node',
+      message: `已创建 ${operations.length} 个图形`,
+      target: lastNode ? nodeTarget(lastNode) : undefined,
+      operation: lastOperation,
+    });
   }
 
   async function answerClarification(text: string): Promise<SimpleExecutionResult> {
@@ -79,7 +125,13 @@ export function createSimpleCommandExecutor(speechFeedback: SpeechFeedbackServic
       switch (draft.intent) {
         case 'create_node':
           return apply(
-            createNodeOperation(draft.label, draft.nodeType, `创建节点“${draft.label}”`),
+            createNodeOperation(
+              draft.label,
+              draft.nodeType,
+              `创建节点“${draft.label}”`,
+              draft.size,
+              draft.style,
+            ),
             `已创建节点${draft.label}`,
             { kind: 'node', id: '', label: draft.label },
             draft.intent,
@@ -134,6 +186,60 @@ export function createSimpleCommandExecutor(speechFeedback: SpeechFeedbackServic
               patch: { style: NODE_COLORS[draft.colorName] },
             }),
             `已将${target.label}改成${draft.colorName}`,
+            nodeTarget(target),
+            draft.intent,
+          );
+        }
+        case 'duplicate_node': {
+          const target = await requireNode(
+            diagram,
+            draft,
+            'targetNodeId',
+            draft.targetText,
+            originalCommand,
+          );
+          if (!target) return finish(clarificationResult());
+          const duplicate: DiagramNode = {
+            ...target,
+            id: createId('node'),
+            label: `${target.label}副本`,
+            position: undefined,
+            size: target.size ? { ...target.size } : undefined,
+            style: target.style ? { ...target.style } : undefined,
+            data: target.data ? { ...target.data } : undefined,
+          };
+          return apply(
+            operation('create_node', `复制节点“${target.label}”`, { node: duplicate }),
+            `已复制${target.label}`,
+            nodeTarget(duplicate),
+            draft.intent,
+          );
+        }
+        case 'resize_node': {
+          const target = await requireNode(
+            diagram,
+            draft,
+            'targetNodeId',
+            draft.targetText,
+            originalCommand,
+          );
+          if (!target) return finish(clarificationResult());
+          const current = getNodeSize(target);
+          const width = draft.width ?? Math.round(current.width * (draft.scale ?? 1));
+          const height = draft.height ?? Math.round(current.height * (draft.scale ?? 1));
+          if (width < 24 || height < 24 || width > 2000 || height > 2000) {
+            return finish({
+              status: 'error',
+              intent: draft.intent,
+              message: '尺寸需要在 24 到 2000 之间',
+            });
+          }
+          return apply(
+            operation('update_node', `调整节点“${target.label}”尺寸`, {
+              nodeId: target.id,
+              patch: { size: { width, height } },
+            }),
+            `已调整${target.label}尺寸`,
             nodeTarget(target),
             draft.intent,
           );
@@ -265,7 +371,16 @@ export function createSimpleCommandExecutor(speechFeedback: SpeechFeedbackServic
     target: ResolvedTarget,
     intent: SimpleExecutionResult['intent'],
   ): Promise<SimpleExecutionResult> {
-    useDiagramStore.getState().applyOperation(operationValue);
+    const verification = useDiagramStore.getState().applyOperation(operationValue);
+    if (!verification.verified) {
+      return finish({
+        status: 'ignored',
+        message: `${verification.message}，请换一种描述或确认目标`,
+        intent,
+        target,
+        operation: operationValue,
+      });
+    }
     const actualTarget =
       target.id || ('node' in operationValue ? nodeTarget(operationValue.node) : target);
     useCommandStore.getState().setLastTarget(actualTarget);
@@ -461,8 +576,12 @@ function createNodeOperation(
   label: string,
   type: DiagramNode['type'],
   description: string,
+  size?: DiagramNode['size'],
+  style?: DiagramNode['style'],
 ): DiagramOperation {
-  return operation('create_node', description, { node: makeNode(label, type) });
+  return operation('create_node', description, {
+    node: { ...makeNode(label, type), size, style },
+  });
 }
 
 function operation<T extends DiagramOperation['type']>(

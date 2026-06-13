@@ -23,6 +23,19 @@ const FLOWCHART_PATTERNS = [
   '完整流程',
 ];
 const SIMPLE_HINTS = ['添加节点', '加节点', '删除节点', '修改节点', '连接'];
+const GENERATION_PATTERNS = [
+  '帮我画',
+  '帮我生成',
+  '帮我创建',
+  '设计一个',
+  '梳理一个',
+  '整理一个',
+  '学习路径',
+  '学习计划',
+  '知识结构',
+  '知识图谱',
+  '步骤图',
+];
 const CONTEXTUAL_MODIFICATION_PATTERNS = [
   /把.+(改|换|弄|调整|优化|整理)/,
   /(加上|补上|补一个|插入|增加|删除|移除|连接|断开).+/,
@@ -89,6 +102,20 @@ export function routeCommand(text: string): RouteResult {
     };
   }
 
+  const objectCommand = parseSimpleCommand(text);
+  if (
+    objectCommand.status === 'ready' &&
+    ['duplicate_node', 'resize_node'].includes(objectCommand.intent)
+  ) {
+    return {
+      ...base,
+      route: 'simple',
+      confidence: 0.96,
+      simpleIntent: objectCommand.intent,
+      reason: '识别为对象级绘图操作',
+    };
+  }
+
   const fast = matchFastCommand(normalizedText);
   if (fast) {
     return {
@@ -148,6 +175,15 @@ export function routeCommand(text: string): RouteResult {
       confidence: 0.9,
       agentIntent: 'create_flowchart',
       reason: '识别为完整流程图生成请求',
+    };
+  }
+  if (GENERATION_PATTERNS.some((pattern) => normalizedText.includes(pattern))) {
+    return {
+      ...base,
+      route: 'agent',
+      confidence: 0.82,
+      agentIntent: 'create_flowchart',
+      reason: '识别为开放式图表生成请求',
     };
   }
   if (CONTEXTUAL_MODIFICATION_PATTERNS.some((pattern) => pattern.test(normalizedText))) {

@@ -49,6 +49,11 @@ Object.defineProperties(HTMLElement.prototype, {
   },
 });
 
+Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+  configurable: true,
+  value: () => undefined,
+});
+
 Object.defineProperty(window, 'webkitSpeechRecognition', {
   value: MockSpeechRecognition,
   writable: true,
