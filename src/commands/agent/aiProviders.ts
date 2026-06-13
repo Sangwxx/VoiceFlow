@@ -11,6 +11,7 @@ import type {
 import { reinforcementLearningDiagram } from '../../mock/reinforcementLearningDiagram';
 
 type AiProviderConfig = {
+  mode?: 'mock' | 'real';
   baseUrl?: string;
   apiKey?: string;
   model?: string;
@@ -228,6 +229,8 @@ export class OpenAiCompatibleProvider implements AiProvider {
 
 export function createConfiguredAiProvider(config: AiProviderConfig = {}): AiProvider {
   const env = import.meta.env;
+  const mode = config.mode ?? env.VITE_AI_MODE;
+  if (mode === 'mock') return new MockAiProvider();
   const baseUrl = config.baseUrl ?? env.VITE_AI_BASE_URL;
   const apiKey = config.apiKey ?? env.VITE_AI_API_KEY;
   const model = config.model ?? env.VITE_AI_MODEL;

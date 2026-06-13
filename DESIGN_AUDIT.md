@@ -1,25 +1,46 @@
-# Design Audit
+# VoiceFlow 设计审计
 
-## Implemented
+## 已实现能力
 
-- Diagram JSON validation, Dagre layout and read-only React Flow rendering.
-- Replaceable voice and AI providers, Fast/Simple/Workflow/Agent routing.
-- Voice node and edge editing, ambiguity clarification, undo and redo.
-- AI full flowchart and architecture generation with preview confirmation.
-- Report mode, themes, main-path highlighting and exception-path weakening.
-- Persistent named versions, restoration preview and version comparison.
-- JSON, SVG and PNG export.
-- Voice focus, fit view, zoom and hide/show exception branches.
-- Login, ecommerce and architecture demonstration scenes.
+- 纯语音创建、编辑、排版、美化、版本管理和导出图表。
+- Fast、Simple、Workflow、Agent 四级命令路由。
+- Fast Path 常用命令本地直通与实时延迟指标。
+- 上下文语义纠错和高、中、低三级置信度处理。
+- 多候选视觉化消歧，支持语音序号或名称选择。
+- Agent 完整图表与 Operation 批次的校验、预览和语音确认。
+- Diagram 运行时校验、撤销/重做、持久版本、JSON/SVG/PNG 导出。
+- Mock AI 稳定演示模式与 OpenAI-compatible Provider。
+- TypeScript、ESLint、Prettier、Vitest、生产构建和 GitHub Actions。
 
-## Intentionally Deferred
+## 题目关键问题解决方案
 
-- Cloud ASR or Whisper fallback.
-- AI arbitrary modification of an existing Diagram and Agent Operation output.
-- Automatic exception completion, process logic auditing and technical-document mode.
-- Swimlanes and non-empty groups.
-- draw.io, Mermaid, PDF, PPT and share-link export.
-- Backend synchronization and collaboration.
-- Demo video recording.
+### 响应延迟
 
-These items are described as later enhancements or are outside the agreed stage 1-5 delivery boundary.
+确定性高频命令不调用 AI，由 Fast Path 本地执行。Simple 和 Workflow 规则路径同样优先于 Agent。系统记录真实执行耗时，并在界面展示各路径平均耗时与 Fast Path 命中率。
+
+### 语言歧义
+
+系统结合命令规则、当前 Diagram、最近目标和最近命令判断语义。高置信度纠错直接执行；中置信度等待确认；低置信度要求重述。目标存在多个候选时，系统展示视觉化候选框并暂停执行。
+
+### 复杂指令安全
+
+Agent 输出只能转换为白名单 Operation 或完整 Diagram。输出通过运行时校验后进入 Proposal，用户说“确认”才提交为一条可撤销历史记录。
+
+## 计划与最终实现对照
+
+| 计划能力             | 最终状态 | 说明                                                                 |
+| -------------------- | -------- | -------------------------------------------------------------------- |
+| 纯语音绘图           | 已完成   | 画布禁用鼠标、键盘和触摸编辑                                         |
+| 常用命令低延迟直通   | 已完成   | Fast Path 本地执行并展示耗时                                         |
+| 语言纠错与主动反问   | 已完成   | 三级置信度策略                                                       |
+| 视觉化候选选择       | 已完成   | 纯语音选择，不增加点击编辑                                           |
+| 新旧版本左右双画布   | 暂缓     | 截止时间内优先保证核心流程稳定；现由 Proposal 预览与确认覆盖主要价值 |
+| 云端 ASR / Whisper   | 暂缓     | 避免引入额外服务和现场网络风险                                       |
+| 后端同步与协作       | 暂缓     | 超出本次纯语音绘图核心范围                                           |
+| PDF/PPT/draw.io 导出 | 暂缓     | 当前提供 JSON、SVG 和 PNG                                            |
+
+## 已知边界
+
+- 浏览器首次麦克风授权属于浏览器安全要求，需要用户手动允许。
+- Mock AI 用于稳定演示，任意主题和自由修改需要配置真实 Provider。
+- 浏览器暴露的 `VITE_` 密钥仅适合本地演示，生产环境需要后端代理。

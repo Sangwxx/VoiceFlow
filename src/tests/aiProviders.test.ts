@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { MockAiProvider, OpenAiCompatibleProvider } from '../commands/agent/aiProviders';
+import {
+  createConfiguredAiProvider,
+  MockAiProvider,
+  OpenAiCompatibleProvider,
+} from '../commands/agent/aiProviders';
 
 describe('AI providers', () => {
   it('returns deterministic mock diagrams and clarification', async () => {
@@ -43,6 +47,17 @@ describe('AI providers', () => {
     ).resolves.toMatchObject({
       correctedText: '生成一张强化学习的流程图',
     });
+  });
+
+  it('allows recording mode to force the deterministic Mock provider', () => {
+    expect(
+      createConfiguredAiProvider({
+        mode: 'mock',
+        baseUrl: 'https://example.test/v1',
+        apiKey: 'secret',
+        model: 'real-model',
+      }),
+    ).toBeInstanceOf(MockAiProvider);
   });
 
   it('sends an OpenAI-compatible request and surfaces HTTP errors', async () => {
