@@ -42,6 +42,10 @@ Web Speech API
 
 ## Safety Boundaries
 
+- Fast Path commands bypass AI and expose measured execution latency in the UI.
+- Semantic correction uses confidence tiers: high confidence executes, medium confidence
+  waits for voice confirmation, and low confidence asks the user to restate.
+- Ambiguous targets are displayed as visual candidates and remain voice-selectable only.
 - Diagram and Operation runtime validators reject invalid graph structures.
 - Contextual Agent requests receive the current Diagram and recent command context, but may only
   return whitelisted Operations. The complete batch is executed against a clone before preview.
