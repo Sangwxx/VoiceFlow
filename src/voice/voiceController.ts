@@ -78,6 +78,31 @@ export function createVoiceController({
       const startedAt = performance.now();
       let executionText = text;
       let route = routeCommand(text);
+      const pendingCorrection = useVoiceStore.getState().pendingCorrection;
+      if (pendingCorrection) {
+        if (route.fastCommand === 'confirm') {
+          executionText = pendingCorrection.correctedText;
+          route = {
+            ...routeCommand(executionText),
+            rawText: text,
+            reason: `用户确认语义纠错：${pendingCorrection.reason}`,
+          };
+          useVoiceStore.getState().setCorrectionFeedback(pendingCorrection);
+          useVoiceStore.getState().setPendingCorrection(null);
+        } else if (route.fastCommand === 'cancel') {
+          useVoiceStore.getState().setPendingCorrection(null);
+        } else {
+          const message = '当前有待确认的语义纠错，请说确认或取消';
+          useCommandStore.getState().setLastMessage(message);
+          void speechFeedback.speak(message);
+          useCommandStore
+            .getState()
+            .addExecutionLog(
+              createExecutionLog(route, { status: 'ignored', message }, startedAt),
+            );
+          return;
+        }
+      }
       const pendingSimple = useCommandStore.getState().pendingClarification;
       const agentClarifying = useAgentStore.getState().status === 'clarifying';
       const workflowState = useWorkflowStore.getState();
@@ -105,14 +130,52 @@ export function createVoiceController({
           });
           const correctedRoute = routeCommand(interpretation.correctedText);
           if (correctedRoute.route !== 'unknown') {
-            useVoiceStore.getState().setCorrectedTranscript(interpretation.correctedText);
-            executionText = interpretation.correctedText;
-            route = {
-              ...correctedRoute,
-              rawText: text,
-              confidence: Math.min(correctedRoute.confidence, interpretation.confidence),
-              reason: `语义纠错：${interpretation.reason}`,
+            const correction = {
+              originalText: text,
+              correctedText: interpretation.correctedText,
+              confidence: interpretation.confidence,
+              reason: interpretation.reason,
             };
+            useVoiceStore.getState().setCorrectionFeedback(correction);
+            if (interpretation.confidence >= 0.75) {
+              executionText = interpretation.correctedText;
+              route = {
+                ...correctedRoute,
+                rawText: text,
+                confidence: Math.min(
+                  correctedRoute.confidence,
+                  interpretation.confidence,
+                ),
+                reason: `高置信度语义纠错：${interpretation.reason}`,
+              };
+            } else {
+              const needsConfirmation = interpretation.confidence >= 0.5;
+              const message = needsConfirmation
+                ? `我理解为“${interpretation.correctedText}”，请说确认或取消`
+                : '语音理解置信度较低，请重新描述命令';
+              if (needsConfirmation) {
+                useVoiceStore.getState().setPendingCorrection(correction);
+              }
+              useCommandStore.getState().setRouteResult({
+                ...route,
+                confidence: interpretation.confidence,
+                reason: needsConfirmation
+                  ? `中置信度语义纠错，等待确认：${interpretation.reason}`
+                  : `低置信度语义纠错，请求重述：${interpretation.reason}`,
+              });
+              useCommandStore.getState().setLastMessage(message);
+              void speechFeedback.speak(message);
+              useCommandStore
+                .getState()
+                .addExecutionLog(
+                  createExecutionLog(
+                    route,
+                    { status: 'clarification', message },
+                    startedAt,
+                  ),
+                );
+              return;
+            }
           }
         } catch {
           // Semantic correction is a best-effort fallback; normal routing feedback remains.
