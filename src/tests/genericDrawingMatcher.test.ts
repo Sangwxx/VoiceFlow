@@ -35,4 +35,17 @@ describe('matchGenericDrawingActions', () => {
   it('caps excessive quantities to keep local execution stable', () => {
     expect(matchGenericDrawingActions('画100个正方形')).toHaveLength(20);
   });
+
+  it('supports natural local drawing verbs and visible polygon fills', () => {
+    const [triangle] = matchGenericDrawingActions('放置一个三角形');
+
+    expect(triangle).toMatchObject({
+      intent: 'create_node',
+      label: '三角形',
+      style: {
+        background: '#dbeafe',
+        clipPath: 'polygon(50% 0, 100% 100%, 0 100%)',
+      },
+    });
+  });
 });

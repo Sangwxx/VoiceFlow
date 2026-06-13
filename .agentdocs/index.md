@@ -18,6 +18,7 @@
 
 ## 已完成任务文档
 
+- `workflow/done/260614-llm-diagram-generation.md`：完整图表由 LLM 主导生成，基础图形保持本地绘制，并增加文字测试入口。
 - `workflow/done/260613-remove-confirmation-questions.md`：删除系统确认与反问流程，改为确定性选择和校验后直接执行。
 
 - `workflow/done/260613-general-structure-diagram.md`：通用结构图生成、低复杂度模型协议与确认队列恢复。

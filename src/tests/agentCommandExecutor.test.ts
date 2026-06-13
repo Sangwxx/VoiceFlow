@@ -124,8 +124,17 @@ describe('agentCommandExecutor', () => {
     expect(complete).toHaveBeenCalledTimes(2);
   });
 
-  it('generates complete structural diagrams locally without calling AI', async () => {
-    const complete = vi.fn();
+  it('uses AI as the primary generator for complete structural diagrams', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      kind: 'diagram',
+      title: '学生选课用例图',
+      diagramType: 'usecase',
+      nodes: [
+        { id: 'student', label: '学生', type: 'user' },
+        { id: 'select', label: '选择课程', type: 'process' },
+      ],
+      edges: [{ from: 'student', to: 'select' }],
+    });
     const executor = createAgentCommandExecutor(
       { mode: 'real', model: 'test-model', complete },
       feedback,
@@ -133,11 +142,32 @@ describe('agentCommandExecutor', () => {
 
     await executor.execute('画一个学生选课用例图', 'create_diagram');
 
-    expect(complete).not.toHaveBeenCalled();
+    expect(complete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        intent: 'create_diagram',
+        originalCommand: '画一个学生选课用例图',
+      }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     expect(useDiagramStore.getState().diagram).toMatchObject({
       title: '学生选课用例图',
       diagramType: 'usecase',
     });
+  });
+
+  it('uses the local planner only when AI is not configured', async () => {
+    const executor = createAgentCommandExecutor(
+      { mode: 'unconfigured', model: '', complete: vi.fn() },
+      feedback,
+    );
+
+    await expect(
+      executor.execute('画一个学生选课用例图', 'create_diagram'),
+    ).resolves.toMatchObject({
+      status: 'success',
+      message: '未配置 AI，已使用本地规划器生成结构图',
+    });
+    expect(useDiagramStore.getState().diagram.diagramType).toBe('usecase');
   });
 });
 

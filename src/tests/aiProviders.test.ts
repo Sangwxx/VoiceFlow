@@ -56,7 +56,14 @@ describe('AI providers', () => {
       expect.objectContaining({ method: 'POST' }),
     );
     const request = fetchImpl.mock.calls[0][1] as RequestInit;
-    expect(JSON.parse(request.body as string)).not.toHaveProperty('temperature');
+    const body = JSON.parse(request.body as string);
+    expect(body).not.toHaveProperty('temperature');
+    expect(body.messages[0].content).toContain(
+      '根据用户主题规划准确、完整且有针对性的结构图',
+    );
+    expect(body.messages[0].content).toContain(
+      '不要使用“核心概念、方法与工具、实践应用”等通用占位词',
+    );
 
     const failing = new OpenAiCompatibleProvider({
       baseUrl: 'https://example.test/v1',

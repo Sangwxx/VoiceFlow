@@ -43,8 +43,11 @@ const COUNTS: Record<string, number> = {
 
 export function matchGenericDrawingActions(text: string): SimpleOperationDraft[] {
   const normalized = normalizeText(text);
-  if (!/^(?:画|绘制|创建|生成|添加|加)/.test(normalized)) return [];
-  const content = normalized.replace(/^(?:画|绘制|创建|生成|添加|加)/, '');
+  if (!/^(?:画出|画|绘制出|绘制|创建|生成|添加|加|放置)/.test(normalized)) return [];
+  const content = normalized.replace(
+    /^(?:画出|画|绘制出|绘制|创建|生成|添加|加|放置)/,
+    '',
+  );
   const pattern = new RegExp(
     `([一二两三四五六七八九十\\d]*)(?:个|张|颗|只)?(红色|蓝色|绿色|黄色|灰色|紫色|橙色)?(${SHAPES.join('|')})`,
     'g',
@@ -88,7 +91,7 @@ function createShapeDraft(shape: string, color?: string): SimpleOperationDraft {
         ? { width: 150, height: 150 }
         : { width: 220, height: 120 },
     style: {
-      background: colorStyle?.background ?? '#ffffff',
+      background: colorStyle?.background ?? '#dbeafe',
       border: colorStyle?.border ?? '#3b82f6',
       borderWidth: 2,
       borderRadius: circle || ellipse ? 999 : square ? 0 : 8,

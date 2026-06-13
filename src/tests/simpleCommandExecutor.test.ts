@@ -74,6 +74,22 @@ describe('simpleCommandExecutor', () => {
     });
   });
 
+  it('creates visible polygon shapes locally', async () => {
+    const executor = createSimpleCommandExecutor(speechFeedback);
+    await expect(executor.execute('画出一个三角形')).resolves.toMatchObject({
+      status: 'success',
+    });
+    expect(
+      useDiagramStore.getState().diagram.nodes.find((node) => node.label === '三角形'),
+    ).toMatchObject({
+      size: { width: 150, height: 150 },
+      style: {
+        background: '#dbeafe',
+        clipPath: 'polygon(50% 0, 100% 100%, 0 100%)',
+      },
+    });
+  });
+
   it('creates multiple generic shapes atomically from one command', async () => {
     const executor = createSimpleCommandExecutor(speechFeedback);
     const before = useDiagramStore.getState().diagram.nodes.length;

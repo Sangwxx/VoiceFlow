@@ -24,10 +24,27 @@ describe('competition app', () => {
     expect(screen.getByRole('complementary', { name: '语音工作区' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: '画布区' })).toBeInTheDocument();
     expect(screen.getByText('实时文字')).toBeInTheDocument();
+    expect(screen.getByRole('form', { name: '文字指令测试' })).toBeInTheDocument();
     expect(screen.getByText('任务列表')).toBeInTheDocument();
     expect(screen.queryByText('系统反问')).not.toBeInTheDocument();
     expect(screen.getByText('版本管理')).toBeInTheDocument();
     expect(screen.getByText('仅收录明确语音保存的版本')).toBeInTheDocument();
+  });
+
+  it('executes typed commands through the voice command controller', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.type(screen.getByRole('textbox', { name: '输入测试指令' }), '横向布局');
+    await user.click(screen.getByRole('button', { name: '执行指令' }));
+
+    expect(useDiagramStore.getState().diagram.layout.direction).toBe('left_to_right');
+    expect(useCommandStore.getState().executionLog[0]).toMatchObject({
+      rawText: '横向布局',
+      route: 'fast',
+      status: 'success',
+    });
+    expect(screen.getByRole('textbox', { name: '输入测试指令' })).toHaveValue('');
   });
 
   it('starts and stops microphone input explicitly', async () => {

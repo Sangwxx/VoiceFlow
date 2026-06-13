@@ -245,13 +245,29 @@ describe('voiceController integration', () => {
     });
     await controller.handleFinalTranscript('声成一张强化学西的流成图');
     expect(useVoiceStore.getState().correctedTranscript).toBe('生成一张强化学习的流程图');
-    expect(useDiagramStore.getState().diagram.title).toBe('强化学习流程图');
+    expect(useDiagramStore.getState().diagram.title).toBe('强化学习学习流程');
+    expect(complete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        originalCommand: '生成一张强化学习的流程图',
+        intent: 'create_diagram',
+      }),
+      expect.any(Object),
+    );
     expect(useVoiceStore.getState().correctionFeedback?.reason).toContain('错词映射');
   });
 
-  it('corrects and generates a matching use case diagram without AI', async () => {
+  it('corrects the transcript before asking AI to generate a matching use case diagram', async () => {
     const provider = new MockVoiceProvider();
-    const complete = vi.fn();
+    const complete = vi.fn().mockResolvedValue({
+      kind: 'diagram',
+      title: '学生选课用例图',
+      diagramType: 'usecase',
+      nodes: [
+        { id: 'student', label: '学生', type: 'user' },
+        { id: 'select', label: '选择课程', type: 'process' },
+      ],
+      edges: [{ from: 'student', to: 'select' }],
+    });
     const controller = createVoiceController({
       provider,
       speechFeedback,
@@ -260,7 +276,13 @@ describe('voiceController integration', () => {
 
     await controller.handleFinalTranscript('画一个学生选课用力图');
 
-    expect(complete).not.toHaveBeenCalled();
+    expect(complete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        originalCommand: '画一个学生选课用例图',
+        intent: 'create_diagram',
+      }),
+      expect.any(Object),
+    );
     expect(useDiagramStore.getState().diagram).toMatchObject({
       title: '学生选课用例图',
       diagramType: 'usecase',

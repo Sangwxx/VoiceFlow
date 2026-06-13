@@ -61,7 +61,7 @@ export function createAgentCommandExecutor(
     try {
       const state = useAgentStore.getState();
       const diagram = useDiagramStore.getState().diagram;
-      if (intent === 'create_diagram') {
+      if (intent === 'create_diagram' && provider.mode === 'unconfigured') {
         const result = planLocalStructuralDiagram(originalCommand);
         if (result.kind !== 'diagram') throw new Error('本地结构图规划失败');
         useAgentStore.getState().setStateForTask({
@@ -73,7 +73,7 @@ export function createAgentCommandExecutor(
         });
         useDiagramStore.getState().replaceDiagram(result.diagram, '生成结构图');
         useAgentStore.getState().clear();
-        const message = '结构图已生成';
+        const message = '未配置 AI，已使用本地规划器生成结构图';
         useCommandStore.getState().setLastMessage(message);
         void speechFeedback.speak(message);
         return { status: 'success', message } as const;
@@ -95,6 +95,7 @@ export function createAgentCommandExecutor(
       let result;
       try {
         result = normalizeAgentResult(output, diagram);
+        ensureResultMatchesIntent(result, intent);
       } catch (normalizationError) {
         const repairedOutput = await provider.complete(
           {
@@ -115,6 +116,7 @@ export function createAgentCommandExecutor(
           { signal: controller.signal },
         );
         result = normalizeAgentResult(repairedOutput, diagram);
+        ensureResultMatchesIntent(result, intent);
       }
       if (result.kind === 'clarification') {
         const message = '指令信息不足，已停止执行';
@@ -175,4 +177,13 @@ export function createAgentCommandExecutor(
       return request(text, intent);
     },
   };
+}
+
+function ensureResultMatchesIntent(
+  result: ReturnType<typeof normalizeAgentResult>,
+  intent: AgentIntent,
+): void {
+  if (intent === 'create_diagram' && result.kind === 'operations') {
+    throw new Error('完整图生成请求必须返回 diagram，不能返回 operations。');
+  }
 }

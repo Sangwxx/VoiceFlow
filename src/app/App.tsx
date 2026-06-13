@@ -47,6 +47,8 @@ const TASK_STATUS_LABELS: Record<VoiceTask['status'], string> = {
 
 export function App() {
   const [manualOpen, setManualOpen] = useState(false);
+  const [textCommand, setTextCommand] = useState('');
+  const [textCommandPending, setTextCommandPending] = useState(false);
   const diagram = useDiagramStore((state) => state.diagram);
   const voiceStatus = useVoiceStore((state) => state.status);
   const interimTranscript = useVoiceStore((state) => state.interimTranscript);
@@ -80,6 +82,19 @@ export function App() {
   }, [currentTask?.id, currentTask?.status]);
 
   const visibleDiagram = exceptionPathsHidden ? hideExceptionPaths(diagram) : diagram;
+
+  async function submitTextCommand(): Promise<void> {
+    const command = textCommand.trim();
+    if (!command || textCommandPending) return;
+    setTextCommandPending(true);
+    useVoiceStore.getState().setFinalTranscript(command);
+    try {
+      await controller.handleFinalTranscript(command);
+      setTextCommand('');
+    } finally {
+      setTextCommandPending(false);
+    }
+  }
 
   return (
     <main className={styles.appShell}>
@@ -119,6 +134,33 @@ export function App() {
             </small>
           </div>
         </section>
+
+        <form
+          className={styles.textCommandSection}
+          aria-label="文字指令测试"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submitTextCommand();
+          }}
+        >
+          <div className={styles.sectionHeading}>
+            <div>
+              <span>文字指令测试</span>
+              <small>无法使用语音时，走同一条指令执行链路</small>
+            </div>
+          </div>
+          <div className={styles.textCommandControls}>
+            <input
+              aria-label="输入测试指令"
+              placeholder="例如：画一个学生选课用例图"
+              value={textCommand}
+              onChange={(event) => setTextCommand(event.target.value)}
+            />
+            <button disabled={!textCommand.trim() || textCommandPending} type="submit">
+              {textCommandPending ? '执行中' : '执行指令'}
+            </button>
+          </div>
+        </form>
 
         <section className={styles.taskSection} aria-label="任务列表">
           <div className={styles.sectionHeading}>
