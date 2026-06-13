@@ -6,7 +6,7 @@
 - 技术栈：React 19、TypeScript、Vite、Zustand、React Flow、Vitest。
 - Diagram JSON 是唯一绘图数据源；组件不得直接修改 Diagram。
 - 所有变更完成后执行：`npm run typecheck`、`npm run lint`、`npm run format:check`、`npm test`、`npm run build`。
-- 项目当前未初始化 Git 仓库，修改前后需通过文件检查与测试确认范围。
+- GitHub 仓库：`https://github.com/Sangwxx/VoiceFlow`；功能开发使用独立分支并在验证后合并到 `main`。
 
 ## 产品文档
 
@@ -19,7 +19,4 @@
 ## 已完成任务文档
 
 - `workflow/done/260613-project-audit-and-improvement.md`：项目审计、版本存储可靠性与画布分包优化。
-
-## 当前任务文档
-
-- `workflow/260613-competition-delivery-sprint.md`：参赛截止前的可解释消歧、延迟展示、演示材料与交付计划。
+- `workflow/done/260613-competition-delivery-sprint.md`：参赛交付冲刺，可解释消歧、延迟展示、演示材料与 CI。

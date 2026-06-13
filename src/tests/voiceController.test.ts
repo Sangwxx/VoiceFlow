@@ -6,7 +6,7 @@ import { useDiagramStore } from '../stores/diagramStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import { MockVoiceProvider } from '../voice/mockVoiceProvider';
 import { createVoiceController } from '../voice/voiceController';
-import { useProposalStore } from '../stores/proposalStore';
+import { createDiagramProposal, useProposalStore } from '../stores/proposalStore';
 import { useVersionStore } from '../stores/versionStore';
 import { useWorkflowStore } from '../stores/workflowStore';
 import { useCanvasViewStore } from '../stores/canvasViewStore';
@@ -204,6 +204,35 @@ describe('voiceController integration', () => {
 
     expect(useVoiceStore.getState().pendingCorrection).toBeNull();
     expect(useDiagramStore.getState().diagram.layout.direction).toBe('top_down');
+  });
+
+  it('confirms a pending correction without confirming a diagram proposal', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createVoiceController({
+      provider,
+      speechFeedback,
+      aiProvider: {
+        mode: 'real',
+        model: 'test-model',
+        complete: vi.fn(),
+        interpretCommand: vi.fn().mockResolvedValue({
+          correctedText: '横向布局',
+          confidence: 0.6,
+          reason: '结合当前绘图上下文修正',
+        }),
+      },
+    });
+
+    await controller.handleFinalTranscript('横像布橘');
+    const diagram = structuredClone(useDiagramStore.getState().diagram);
+    useProposalStore
+      .getState()
+      .setProposal(createDiagramProposal('demo_scene', diagram, '候选图', '待确认'));
+
+    await controller.handleFinalTranscript('确认');
+
+    expect(useDiagramStore.getState().diagram.layout.direction).toBe('left_to_right');
+    expect(useProposalStore.getState().proposal).not.toBeNull();
   });
 
   it('asks the user to restate a low-confidence correction', async () => {
