@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 
 import {
   createConfiguredAiProvider,
@@ -16,7 +16,7 @@ describe('AI providers', () => {
     expect(provider).toBeInstanceOf(UnconfiguredAiProvider);
     await expect(
       provider.complete({
-        intent: 'create_flowchart',
+        intent: 'create_diagram',
         originalCommand: '画流程图',
         conversation: [],
       }),
@@ -47,7 +47,7 @@ describe('AI providers', () => {
       fetchImpl,
     });
     await provider.complete({
-      intent: 'create_flowchart',
+      intent: 'create_diagram',
       originalCommand: '画流程图',
       conversation: [],
     });
@@ -70,7 +70,7 @@ describe('AI providers', () => {
     });
     await expect(
       failing.complete({
-        intent: 'create_flowchart',
+        intent: 'create_diagram',
         originalCommand: '画流程图',
         conversation: [],
       }),
@@ -89,13 +89,14 @@ describe('AI providers', () => {
       fetchImpl,
     });
     await provider.complete({
-      intent: 'create_flowchart',
+      intent: 'create_diagram',
       originalCommand: '画一个学习流程',
       conversation: [],
     });
     const request = fetchImpl.mock.calls[0][1] as RequestInit;
     expect(JSON.parse(request.body as string)).toMatchObject({
       response_format: { type: 'json_object' },
+      thinking: { type: 'disabled' },
     });
   });
 });

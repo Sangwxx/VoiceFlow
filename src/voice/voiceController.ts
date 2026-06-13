@@ -81,6 +81,21 @@ export function createVoiceController({
     );
   }
 
+  function settleBlockedTasks(cancelled: boolean): void {
+    let changed = false;
+    tasks = tasks.map((task) => {
+      if (
+        task.status !== 'awaiting_confirmation' &&
+        task.status !== 'needs_clarification'
+      ) {
+        return task;
+      }
+      changed = true;
+      return { ...task, status: cancelled ? 'no_change' : 'completed' };
+    });
+    if (changed) publishTasks();
+  }
+
   async function drainTasks(): Promise<void> {
     if (drainingTasks) {
       drainRequested = true;
@@ -248,7 +263,7 @@ export function createVoiceController({
           ...route,
           route: 'agent',
           confidence: 0.95,
-          agentIntent: useAgentStore.getState().intent ?? 'create_flowchart',
+          agentIntent: useAgentStore.getState().intent ?? 'create_diagram',
           reason: '处理待澄清的 AI 语音回答',
         };
       } else if (workflowClarifying && route.route !== 'fast') {
@@ -301,6 +316,14 @@ export function createVoiceController({
       useCommandStore
         .getState()
         .addExecutionLog(createExecutionLog(route, result, startedAt));
+      if (
+        route.route === 'fast' &&
+        (route.fastCommand === 'confirm' || route.fastCommand === 'cancel') &&
+        result.status === 'success'
+      ) {
+        settleBlockedTasks(route.fastCommand === 'cancel');
+        void drainTasks();
+      }
       const voice = useVoiceStore.getState();
       if (voice.status !== 'speaking') {
         voice.setStatus(

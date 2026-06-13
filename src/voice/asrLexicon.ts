@@ -30,6 +30,13 @@ const ACTION_ENTRIES: LexiconEntry[] = [
 const DIAGRAM_ENTRIES: LexiconEntry[] = [
   entry('流程图', 1, 'diagram'),
   entry('系统架构图', 1, 'diagram', ['架构图', '服务架构', '技术架构']),
+  entry('组织结构图', 1, 'diagram', ['组织架构图']),
+  entry('用例图', 1, 'diagram'),
+  entry('思维导图', 1, 'diagram', ['脑图']),
+  entry('数据流图', 1, 'diagram'),
+  entry('框架图', 1, 'diagram'),
+  entry('结构图', 1, 'diagram'),
+  entry('表格', 1, 'diagram'),
   entry('节点', 1, 'diagram'),
   entry('连线', 1, 'diagram'),
   entry('分支', 1, 'diagram'),
@@ -125,6 +132,7 @@ export const BUILTIN_ASR_LEXICON: LexiconEntry[] = [
 
 export const ASR_ERROR_MAPPINGS: Array<[RegExp, string]> = [
   [/流成图|流程途|流程兔/g, '流程图'],
+  [/用力图|用例途|用例兔/g, '用例图'],
   [/架够图|价构图|架构途/g, '架构图'],
   [/声成|生成成/g, '生成'],
   [/话一个|化一个/g, '画一个'],

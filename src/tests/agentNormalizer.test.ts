@@ -45,6 +45,35 @@ describe('normalizeAgentResult', () => {
     ).toThrow();
   });
 
+  it.each([
+    ['usecase', '学生选课用例图'],
+    ['organization', '公司组织结构图'],
+    ['mindmap', '产品功能思维导图'],
+    ['framework', '前端技术框架图'],
+    ['table', '方案对比表格'],
+  ])('normalizes a compact %s structural blueprint', (diagramType, title) => {
+    const result = normalizeAgentResult({
+      kind: 'diagram',
+      title,
+      diagramType,
+      direction: 'left_to_right',
+      nodes: [
+        { id: 'a', label: '主体', type: 'user' },
+        { id: 'b', label: '结构内容', type: 'process' },
+      ],
+      edges: [{ from: 'a', to: 'b' }],
+      groups: [{ label: '结构分组', nodeIds: ['b'] }],
+    });
+    expect(result.kind).toBe('diagram');
+    if (result.kind !== 'diagram') return;
+    expect(result.diagram).toMatchObject({
+      title,
+      diagramType,
+      layout: { direction: 'left_to_right' },
+      groups: [{ label: '结构分组', nodeIds: ['b'] }],
+    });
+  });
+
   it('normalizes and validates contextual operations against the current diagram', () => {
     const result = normalizeAgentResult(
       {

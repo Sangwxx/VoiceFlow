@@ -1,7 +1,7 @@
 import type { Diagram } from '../../core/diagram/diagramTypes';
 import type { DiagramOperation } from '../../core/operations/operationTypes';
 
-export type AgentIntent = 'create_flowchart' | 'create_architecture' | 'modify_diagram';
+export type AgentIntent = 'create_diagram' | 'modify_diagram';
 
 export type AgentStatus =
   | 'idle'

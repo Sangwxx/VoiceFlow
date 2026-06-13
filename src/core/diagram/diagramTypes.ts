@@ -3,6 +3,11 @@ export const DIAGRAM_TYPES = [
   'architecture',
   'organization',
   'dataflow',
+  'usecase',
+  'mindmap',
+  'framework',
+  'table',
+  'generic',
 ] as const;
 export type DiagramType = (typeof DIAGRAM_TYPES)[number];
 

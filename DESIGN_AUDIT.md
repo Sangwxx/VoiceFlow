@@ -7,7 +7,7 @@
 - Fast Path 常用命令本地直通与实时延迟指标。
 - 不调用 AI 的本地 ASR 校准：可扩展领域词典、高精度错词映射、完整汉字拼音、编辑距离、候选竞争和当前画布上下文。
 - 多候选视觉化消歧，支持语音序号或名称选择。
-- Agent 完整图表与 Operation 批次的校验、预览和语音确认。
+- 通用结构图本地规划，以及 Agent Operation 批次的校验、预览和语音确认。
 - Diagram 运行时校验、撤销/重做、持久版本、JSON/SVG/PNG 导出。
 - 仅支持真实 OpenAI-compatible Provider；未配置和请求失败均明确报错。
 - TypeScript、ESLint、Prettier、Vitest、生产构建和 GitHub Actions。
@@ -24,7 +24,7 @@
 
 ### 复杂指令安全
 
-Agent 输出只能转换为白名单 Operation 或完整 Diagram。输出通过运行时校验后进入 Proposal，用户说“确认”才提交为一条可撤销历史记录。
+完整新图由本地结构规划器生成紧凑蓝图；无法确定的上下文修改才调用 Agent，并只能转换为白名单 Operation。结果通过运行时校验后进入 Proposal，用户说“确认”才提交为一条可撤销历史记录。
 
 ## 计划与最终实现对照
 

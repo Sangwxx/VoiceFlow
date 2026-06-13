@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createAgentCommandExecutor,
@@ -26,10 +26,7 @@ describe('agentCommandExecutor', () => {
       diagramProvider('architecture'),
       feedback,
     );
-    await executor.execute(
-      '画一个包含网关、服务和数据库的系统架构图',
-      'create_architecture',
-    );
+    await executor.execute('画一个包含网关、服务和数据库的系统架构图', 'create_diagram');
 
     expect(useAgentStore.getState().status).toBe('preview');
     expect(useDiagramStore.getState().diagram).toEqual(original);
@@ -42,7 +39,7 @@ describe('agentCommandExecutor', () => {
 
   it('enters clarification and resubmits the answer', async () => {
     const executor = createAgentCommandExecutor(clarificationProvider(), feedback);
-    await executor.execute('画点东西', 'create_flowchart');
+    await executor.execute('把当前图整理清楚', 'modify_diagram');
     expect(useAgentStore.getState().status).toBe('clarifying');
     await executor.answerClarification('用户登录流程');
     expect(useAgentStore.getState().status).toBe('preview');
@@ -61,7 +58,7 @@ describe('agentCommandExecutor', () => {
         }),
     };
     const executor = createAgentCommandExecutor(provider, feedback);
-    const task = executor.execute('画流程图', 'create_flowchart');
+    const task = executor.execute('调整当前图', 'modify_diagram');
     useAgentStore.getState().cancel();
     await task;
     expect(useAgentStore.getState().previewDiagram).toBeNull();
@@ -96,8 +93,8 @@ describe('agentCommandExecutor', () => {
       { mode: 'real', model: 'test-model', complete },
       feedback,
     );
-    const first = executor.execute('画一个高中数学学习流程', 'create_flowchart');
-    const second = executor.execute('画一个高中数学学习流程', 'create_flowchart');
+    const first = executor.execute('调整高中数学学习流程', 'modify_diagram');
+    const second = executor.execute('调整高中数学学习流程', 'modify_diagram');
     expect(complete).toHaveBeenCalledTimes(1);
     resolveRequest?.({
       kind: 'diagram',
@@ -132,9 +129,25 @@ describe('agentCommandExecutor', () => {
       feedback,
     );
     await expect(
-      executor.execute('画一个学习流程', 'create_flowchart'),
+      executor.execute('调整学习流程', 'modify_diagram'),
     ).resolves.toMatchObject({ status: 'success' });
     expect(complete).toHaveBeenCalledTimes(2);
+  });
+
+  it('generates complete structural diagrams locally without calling AI', async () => {
+    const complete = vi.fn();
+    const executor = createAgentCommandExecutor(
+      { mode: 'real', model: 'test-model', complete },
+      feedback,
+    );
+
+    await executor.execute('画一个学生选课用例图', 'create_diagram');
+
+    expect(complete).not.toHaveBeenCalled();
+    expect(useAgentStore.getState().previewDiagram).toMatchObject({
+      title: '学生选课用例图',
+      diagramType: 'usecase',
+    });
   });
 });
 
@@ -169,7 +182,7 @@ function clarificationProvider(): AiProvider {
       return calls === 1
         ? { kind: 'clarification', question: '请补充具体流程' }
         : diagramProvider('flowchart').complete({
-            intent: 'create_flowchart',
+            intent: 'create_diagram',
             originalCommand: '',
             conversation: [],
           });

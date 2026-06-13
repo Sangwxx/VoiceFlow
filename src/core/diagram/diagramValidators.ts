@@ -66,7 +66,7 @@ export function validateDiagram(input: unknown): DiagramValidationResult {
   if (!isNonEmptyString(input.id)) addError('required', 'id', '图形 ID 不能为空。');
   if (!isNonEmptyString(input.title)) addError('required', 'title', '图形标题不能为空。');
   if (!hasAllowedValue(DIAGRAM_TYPES, input.diagramType)) {
-    addError('invalid_type', 'diagramType', '图形类型必须是 flowchart 或 architecture。');
+    addError('invalid_type', 'diagramType', '图形类型不受支持。');
   }
 
   const nodeIds = new Set<string>();

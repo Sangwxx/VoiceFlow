@@ -42,19 +42,31 @@ describe('routeCommand', () => {
     });
   });
 
-  it('classifies flowchart and architecture Agent intents', () => {
+  it('routes all complete structural diagrams through one generic Agent intent', () => {
     expect(routeCommand('画一个完整登录流程图')).toMatchObject({
       route: 'agent',
-      agentIntent: 'create_flowchart',
+      agentIntent: 'create_diagram',
     });
     expect(routeCommand('生成一个订单系统架构图')).toMatchObject({
       route: 'agent',
-      agentIntent: 'create_architecture',
+      agentIntent: 'create_diagram',
     });
     expect(routeCommand('确认')).toMatchObject({ route: 'fast', fastCommand: 'confirm' });
     expect(routeCommand('生成一张强化学习的学习流程图')).toMatchObject({
       route: 'agent',
-      agentIntent: 'create_flowchart',
+      agentIntent: 'create_diagram',
+    });
+    expect(routeCommand('画一个学生选课用例图')).toMatchObject({
+      route: 'agent',
+      agentIntent: 'create_diagram',
+    });
+    expect(routeCommand('生成公司组织结构图')).toMatchObject({
+      route: 'agent',
+      agentIntent: 'create_diagram',
+    });
+    expect(routeCommand('做一个功能对比表格')).toMatchObject({
+      route: 'agent',
+      agentIntent: 'create_diagram',
     });
   });
 
@@ -77,11 +89,11 @@ describe('routeCommand', () => {
     });
     expect(routeCommand('画一个高中数据的学习流程')).toMatchObject({
       route: 'agent',
-      agentIntent: 'create_flowchart',
+      agentIntent: 'create_diagram',
     });
     expect(routeCommand('帮我梳理一个机器学习路径')).toMatchObject({
       route: 'agent',
-      agentIntent: 'create_flowchart',
+      agentIntent: 'create_diagram',
     });
   });
 

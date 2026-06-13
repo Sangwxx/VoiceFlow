@@ -177,6 +177,37 @@ describe('voiceController integration', () => {
     await vi.waitFor(() => {
       expect(useProposalStore.getState().proposal).toBeNull();
       expect(useDiagramStore.getState().diagram.layout.direction).toBe('left_to_right');
+      expect(useVoiceStore.getState().taskQueue.map((task) => task.status)).toEqual([
+        'completed',
+        'completed',
+        'completed',
+      ]);
+    });
+  });
+
+  it('cancels a proposal and resumes the remaining ordered tasks', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+
+    controller.startListening();
+    provider.emitFinal('整理成适合汇报的版本，然后横向布局');
+    provider.emitSilence();
+    await vi.waitFor(() => {
+      expect(useProposalStore.getState().proposal).not.toBeNull();
+    });
+
+    controller.startListening();
+    provider.emitFinal('取消');
+    provider.emitSilence();
+
+    await vi.waitFor(() => {
+      expect(useProposalStore.getState().proposal).toBeNull();
+      expect(useDiagramStore.getState().diagram.layout.direction).toBe('left_to_right');
+      expect(useVoiceStore.getState().taskQueue.map((task) => task.status)).toEqual([
+        'no_change',
+        'completed',
+        'completed',
+      ]);
     });
   });
 
@@ -275,8 +306,54 @@ describe('voiceController integration', () => {
     });
     await controller.handleFinalTranscript('声成一张强化学西的流成图');
     expect(useVoiceStore.getState().correctedTranscript).toBe('生成一张强化学习的流程图');
-    expect(useProposalStore.getState().proposal?.diagram.title).toBe('强化学习学习流程');
+    expect(useProposalStore.getState().proposal?.diagram.title).toBe('强化学习流程图');
     expect(useVoiceStore.getState().correctionFeedback?.reason).toContain('错词映射');
+  });
+
+  it('corrects and generates a matching use case diagram without AI', async () => {
+    const provider = new MockVoiceProvider();
+    const complete = vi.fn();
+    const controller = createVoiceController({
+      provider,
+      speechFeedback,
+      aiProvider: { mode: 'real', model: 'test-model', complete },
+    });
+
+    await controller.handleFinalTranscript('画一个学生选课用力图');
+
+    expect(complete).not.toHaveBeenCalled();
+    expect(useProposalStore.getState().proposal?.diagram).toMatchObject({
+      title: '学生选课用例图',
+      diagramType: 'usecase',
+    });
+  });
+
+  it('confirms a generated structural diagram and continues later voice tasks', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+
+    controller.startListening();
+    provider.emitFinal('画一个学生选课用力图，然后纵向布局');
+    provider.emitSilence();
+    await vi.waitFor(() => {
+      expect(useProposalStore.getState().proposal?.diagram.diagramType).toBe('usecase');
+    });
+
+    controller.startListening();
+    provider.emitFinal('确认');
+    provider.emitSilence();
+
+    await vi.waitFor(() => {
+      expect(useProposalStore.getState().proposal).toBeNull();
+      expect(useDiagramStore.getState().diagram).toMatchObject({
+        title: '学生选课用例图',
+        diagramType: 'usecase',
+        layout: { direction: 'top_down' },
+      });
+      expect(
+        useVoiceStore.getState().taskQueue.every((task) => task.status === 'completed'),
+      ).toBe(true);
+    });
   });
 
   it('never calls AI for local speech calibration', async () => {

@@ -6,8 +6,7 @@ import {
 import { parseSimpleCommand } from '../simple/simpleCommandParser';
 import type { RouteResult } from './routeTypes';
 
-const ARCHITECTURE_PATTERNS = ['架构图', '系统架构', '服务架构', '技术架构'];
-const FLOWCHART_PATTERNS = [
+const DIAGRAM_GENERATION_PATTERNS = [
   '画一个',
   '画一张',
   '生成一个',
@@ -19,11 +18,17 @@ const FLOWCHART_PATTERNS = [
   '绘制一个',
   '绘制一张',
   '流程图',
+  '架构图',
+  '组织结构图',
+  '用例图',
+  '思维导图',
+  '脑图',
+  '数据流图',
+  '框架图',
+  '结构图',
+  '表格',
   '学习流程',
   '完整流程',
-];
-const SIMPLE_HINTS = ['添加节点', '加节点', '删除节点', '修改节点', '连接'];
-const GENERATION_PATTERNS = [
   '帮我画',
   '帮我生成',
   '帮我创建',
@@ -36,6 +41,7 @@ const GENERATION_PATTERNS = [
   '知识图谱',
   '步骤图',
 ];
+const SIMPLE_HINTS = ['添加节点', '加节点', '删除节点', '修改节点', '连接'];
 const CONTEXTUAL_MODIFICATION_PATTERNS = [
   /把.+(改|换|弄|调整|优化|整理)/,
   /(加上|补上|补一个|插入|增加|删除|移除|连接|断开).+/,
@@ -159,31 +165,13 @@ export function routeCommand(text: string): RouteResult {
     };
   }
 
-  if (ARCHITECTURE_PATTERNS.some((pattern) => normalizedText.includes(pattern))) {
-    return {
-      ...base,
-      route: 'agent',
-      confidence: 0.92,
-      agentIntent: 'create_architecture',
-      reason: '识别为完整系统架构图生成请求',
-    };
-  }
-  if (FLOWCHART_PATTERNS.some((pattern) => normalizedText.includes(pattern))) {
+  if (DIAGRAM_GENERATION_PATTERNS.some((pattern) => normalizedText.includes(pattern))) {
     return {
       ...base,
       route: 'agent',
       confidence: 0.9,
-      agentIntent: 'create_flowchart',
-      reason: '识别为完整流程图生成请求',
-    };
-  }
-  if (GENERATION_PATTERNS.some((pattern) => normalizedText.includes(pattern))) {
-    return {
-      ...base,
-      route: 'agent',
-      confidence: 0.82,
-      agentIntent: 'create_flowchart',
-      reason: '识别为开放式图表生成请求',
+      agentIntent: 'create_diagram',
+      reason: '识别为通用结构图生成请求',
     };
   }
   if (CONTEXTUAL_MODIFICATION_PATTERNS.some((pattern) => pattern.test(normalizedText))) {

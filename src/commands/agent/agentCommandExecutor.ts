@@ -6,6 +6,7 @@ import { useDiagramStore } from '../../stores/diagramStore';
 import type { FastCommandExecutionResult } from '../fast/fastCommandExecutor';
 import { normalizeAgentResult } from './agentNormalizer';
 import type { AgentIntent, AiProvider } from './agentTypes';
+import { planLocalStructuralDiagram } from './structuralDiagramPlanner';
 
 export function createAgentCommandExecutor(
   provider: AiProvider,
@@ -61,6 +62,31 @@ export function createAgentCommandExecutor(
     try {
       const state = useAgentStore.getState();
       const diagram = useDiagramStore.getState().diagram;
+      if (intent === 'create_diagram') {
+        const result = planLocalStructuralDiagram(originalCommand);
+        if (result.kind !== 'diagram') throw new Error('本地结构图规划失败');
+        useAgentStore.getState().setStateForTask({
+          status: 'preview',
+          previewDiagram: result.diagram,
+          explanation: result.explanation,
+          summary: result.summary,
+          controller: null,
+        });
+        useProposalStore
+          .getState()
+          .setProposal(
+            createDiagramProposal(
+              'agent',
+              result.diagram,
+              '确认生成结构图',
+              result.summary,
+            ),
+          );
+        const message = '结构图预览已生成，请说确认或取消';
+        useCommandStore.getState().setLastMessage(message);
+        void speechFeedback.speak(message);
+        return { status: 'success', message } as const;
+      }
       const agentRequest = {
         intent,
         originalCommand,

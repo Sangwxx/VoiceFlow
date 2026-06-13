@@ -119,19 +119,26 @@ export function normalizeAgentResult(
   const rawType = source.diagramType ?? source.diagram_type;
   const diagramType = DIAGRAM_TYPES.includes(rawType as never)
     ? (rawType as Diagram['diagramType'])
-    : 'flowchart';
+    : 'generic';
   const rawLayout = recordOrEmpty(source.layout);
-  const rawDirection = rawLayout.direction ?? rawLayout.layout_direction;
+  const rawDirection =
+    source.direction ?? rawLayout.direction ?? rawLayout.layout_direction;
   const direction = rawDirection === 'left_to_right' ? 'left_to_right' : 'top_down';
+  const groups = normalizeGroups(source.groups, idMap);
   const diagram: Diagram = {
     id: slug(stringValue(source.id, `agent_${Date.now()}`), `agent_${Date.now()}`),
     title: stringValue(source.title, 'AI 生成图表'),
     diagramType,
     nodes,
     edges,
-    groups: [],
+    groups,
     layout: { direction, spacingX: 90, spacingY: 80, autoLayout: true },
-    theme: { name: diagramType === 'architecture' ? 'tech_dark' : 'business_blue' },
+    theme: {
+      name:
+        diagramType === 'architecture' || diagramType === 'framework'
+          ? 'tech_dark'
+          : 'business_blue',
+    },
     metadata: { createdAt: now, updatedAt: now, version: 1 },
   };
   const validation = validateDiagram(diagram);
@@ -148,6 +155,25 @@ export function normalizeAgentResult(
     ),
     diagram: defaultLayoutEngine.layout(validation.data),
   };
+}
+
+function normalizeGroups(value: unknown, idMap: Map<string, string>): Diagram['groups'] {
+  if (!Array.isArray(value)) return [];
+  const usedIds = new Set<string>();
+  return value.map((raw, index) => {
+    const group = record(raw);
+    const label = stringValue(group.label ?? group.name, `分组 ${index + 1}`);
+    const nodeIds = Array.isArray(group.nodeIds)
+      ? group.nodeIds
+          .filter((nodeId): nodeId is string => typeof nodeId === 'string')
+          .map((nodeId) => idMap.get(nodeId) ?? nodeId)
+      : [];
+    return {
+      id: uniqueId(slug(stringValue(group.id, label), `group_${index + 1}`), usedIds),
+      label,
+      nodeIds,
+    };
+  });
 }
 
 function normalizeOperations(value: unknown): DiagramOperation[] {

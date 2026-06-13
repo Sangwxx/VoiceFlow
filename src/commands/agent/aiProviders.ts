@@ -48,7 +48,10 @@ export class OpenAiCompatibleProvider implements AiProvider {
           model: this.config.model,
           messages: [{ role: 'user', content: buildAgentPrompt(request) }],
           ...(this.config.baseUrl.includes('moonshot.cn')
-            ? { response_format: { type: 'json_object' } }
+            ? {
+                response_format: { type: 'json_object' },
+                thinking: { type: 'disabled' },
+              }
             : {}),
         }),
         signal: options?.signal,

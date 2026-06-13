@@ -27,6 +27,17 @@ describe('localAsrCalibrator', () => {
     });
   });
 
+  it('corrects common structural diagram recognition errors without AI', () => {
+    expect(
+      calibrateAsrTranscript('画一个学生选课用力图', {
+        diagram: loginFlowDiagram,
+      }),
+    ).toMatchObject({
+      correctedText: '画一个学生选课用例图',
+      changed: true,
+    });
+  });
+
   it('uses phonetic similarity and edit distance for domain terms', () => {
     expect(
       calibrateAsrTranscript('请重新排板', { diagram: loginFlowDiagram }).correctedText,
@@ -53,9 +64,9 @@ describe('localAsrCalibrator', () => {
   it('ships a reusable baseline lexicon and expands it from live context', () => {
     const stats = getBuiltInLexiconStats();
     expect(stats).toEqual({
-      canonicalTerms: 99,
-      aliases: 49,
-      errorMappings: 18,
+      canonicalTerms: 106,
+      aliases: 51,
+      errorMappings: 19,
       phoneticGroups: 71,
     });
     expect(
