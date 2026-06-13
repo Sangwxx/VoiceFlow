@@ -59,6 +59,7 @@ export function createVoiceController({
           if (!shouldListen) useVoiceStore.getState().setStatus('idle');
         },
         onResult: ({ text, isFinal }) => {
+          if (!shouldListen) return;
           if (isFinal) {
             useVoiceStore.getState().setFinalTranscript(text);
             void controller.handleFinalTranscript(text);
@@ -257,7 +258,9 @@ export function createVoiceController({
         .addExecutionLog(createExecutionLog(route, result, startedAt));
       const voice = useVoiceStore.getState();
       if (voice.status !== 'speaking') {
-        voice.setStatus(voice.commandPaused ? 'paused' : 'listening');
+        voice.setStatus(
+          shouldListen ? (voice.commandPaused ? 'paused' : 'listening') : 'idle',
+        );
       }
     },
     pauseForFeedback() {

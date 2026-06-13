@@ -91,6 +91,20 @@ describe('voiceController integration', () => {
     });
   });
 
+  it('ignores recognition results that arrive after listening stops', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+
+    controller.startListening();
+    controller.stopListening();
+    provider.emitFinal('横向布局');
+    await Promise.resolve();
+
+    expect(useVoiceStore.getState().status).toBe('idle');
+    expect(useDiagramStore.getState().diagram.layout.direction).toBe('top_down');
+    expect(useCommandStore.getState().executionLog).toHaveLength(0);
+  });
+
   it('executes Simple Path commands and handles clarification answers', async () => {
     const provider = new MockVoiceProvider();
     const controller = createTestController(provider);

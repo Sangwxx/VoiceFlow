@@ -97,4 +97,28 @@ describe('AI providers', () => {
       }),
     ).rejects.toThrow('HTTP 500');
   });
+
+  it('calls the browser fetch function without an illegal receiver binding', async () => {
+    const browserFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: '{"kind":"clarification","question":"补充"}' } }],
+      }),
+    });
+    vi.stubGlobal('fetch', browserFetch);
+    const provider = new OpenAiCompatibleProvider({
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'secret',
+      model: 'gpt-4.1-mini',
+    });
+
+    await provider.complete({
+      intent: 'create_flowchart',
+      originalCommand: '画流程图',
+      conversation: [],
+    });
+
+    expect(browserFetch).toHaveBeenCalledOnce();
+    vi.unstubAllGlobals();
+  });
 });
