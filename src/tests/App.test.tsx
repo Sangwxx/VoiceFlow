@@ -54,8 +54,10 @@ describe('competition app', () => {
 
     render(<App />);
 
-    expect(screen.getByText('需要语音澄清')).toBeInTheDocument();
-    expect(screen.getByText('你指的是哪条连线？')).toBeInTheDocument();
+    expect(screen.getByText('视觉化消歧')).toBeInTheDocument();
+    expect(screen.getByText('原始语音')).toBeInTheDocument();
+    expect(screen.getByText(/把失败分支改成红色虚线/)).toBeInTheDocument();
     expect(screen.getByText('登录成功 → 错误提示（失败）')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
   });
 });
