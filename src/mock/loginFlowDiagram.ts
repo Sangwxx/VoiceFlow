@@ -1,0 +1,72 @@
+import type { Diagram } from '../core/diagram/diagramTypes';
+
+export const loginFlowDiagram: Diagram = {
+  id: 'login-flow',
+  title: '用户登录流程',
+  diagramType: 'flowchart',
+  nodes: [
+    { id: 'start', label: '开始', type: 'start' },
+    { id: 'open-app', label: '打开 App', type: 'process' },
+    { id: 'check-login', label: '是否已登录？', type: 'decision' },
+    { id: 'login-page', label: '进入登录页', type: 'process' },
+    { id: 'submit-login', label: '提交账号密码', type: 'process' },
+    { id: 'login-success', label: '登录成功？', type: 'decision' },
+    {
+      id: 'show-error',
+      label: '提示登录错误',
+      type: 'process',
+      style: { background: '#fff1f0', border: '#f36b63', color: '#9b2c2c' },
+    },
+    { id: 'home', label: '进入首页', type: 'process' },
+    { id: 'end', label: '结束', type: 'end' },
+  ],
+  edges: [
+    { id: 'e-start-open', from: 'start', to: 'open-app' },
+    { id: 'e-open-check', from: 'open-app', to: 'check-login' },
+    {
+      id: 'e-check-home',
+      from: 'check-login',
+      to: 'home',
+      label: '是',
+      type: 'highlight',
+    },
+    {
+      id: 'e-check-login',
+      from: 'check-login',
+      to: 'login-page',
+      label: '否',
+      type: 'dashed',
+    },
+    { id: 'e-login-submit', from: 'login-page', to: 'submit-login' },
+    { id: 'e-submit-success', from: 'submit-login', to: 'login-success' },
+    {
+      id: 'e-success-home',
+      from: 'login-success',
+      to: 'home',
+      label: '成功',
+      type: 'highlight',
+    },
+    {
+      id: 'e-success-error',
+      from: 'login-success',
+      to: 'show-error',
+      label: '失败',
+      type: 'weak',
+    },
+    { id: 'e-error-login', from: 'show-error', to: 'login-page', type: 'weak' },
+    { id: 'e-home-end', from: 'home', to: 'end' },
+  ],
+  groups: [],
+  layout: {
+    direction: 'top_down',
+    spacingX: 80,
+    spacingY: 80,
+    autoLayout: true,
+  },
+  theme: { name: 'business_blue' },
+  metadata: {
+    createdAt: '2026-06-12T09:00:00.000Z',
+    updatedAt: '2026-06-12T09:00:00.000Z',
+    version: 1,
+  },
+};

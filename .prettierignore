@@ -1,0 +1,6 @@
+node_modules
+dist
+coverage
+package-lock.json
+VoiceFlow 技术方案设计.md
+VoiceFlow：纯语音控制的智能绘图工具方案设计书.md
