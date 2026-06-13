@@ -150,6 +150,84 @@ describe('voiceController integration', () => {
     await controller.handleFinalTranscript('声成一张强化学西的流成图');
     expect(useVoiceStore.getState().correctedTranscript).toBe('生成一张强化学习的流程图');
     expect(useProposalStore.getState().proposal?.diagram.title).toBe('强化学习学习流程');
+    expect(useVoiceStore.getState().correctionFeedback?.confidence).toBe(0.82);
+  });
+
+  it('waits for confirmation before executing a medium-confidence correction', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createVoiceController({
+      provider,
+      speechFeedback,
+      aiProvider: {
+        mode: 'real',
+        model: 'test-model',
+        complete: vi.fn(),
+        interpretCommand: vi.fn().mockResolvedValue({
+          correctedText: '横向布局',
+          confidence: 0.6,
+          reason: '结合当前绘图上下文修正',
+        }),
+      },
+    });
+
+    await controller.handleFinalTranscript('横像布橘');
+    expect(useDiagramStore.getState().diagram.layout.direction).toBe('top_down');
+    expect(useVoiceStore.getState().pendingCorrection).toMatchObject({
+      correctedText: '横向布局',
+      confidence: 0.6,
+    });
+
+    await controller.handleFinalTranscript('确认');
+    expect(useVoiceStore.getState().pendingCorrection).toBeNull();
+    expect(useDiagramStore.getState().diagram.layout.direction).toBe('left_to_right');
+  });
+
+  it('cancels a medium-confidence correction without confirming a proposal', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createVoiceController({
+      provider,
+      speechFeedback,
+      aiProvider: {
+        mode: 'real',
+        model: 'test-model',
+        complete: vi.fn(),
+        interpretCommand: vi.fn().mockResolvedValue({
+          correctedText: '横向布局',
+          confidence: 0.6,
+          reason: '结合当前绘图上下文修正',
+        }),
+      },
+    });
+
+    await controller.handleFinalTranscript('横像布橘');
+    await controller.handleFinalTranscript('取消');
+
+    expect(useVoiceStore.getState().pendingCorrection).toBeNull();
+    expect(useDiagramStore.getState().diagram.layout.direction).toBe('top_down');
+  });
+
+  it('asks the user to restate a low-confidence correction', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createVoiceController({
+      provider,
+      speechFeedback,
+      aiProvider: {
+        mode: 'real',
+        model: 'test-model',
+        complete: vi.fn(),
+        interpretCommand: vi.fn().mockResolvedValue({
+          correctedText: '横向布局',
+          confidence: 0.3,
+          reason: '只能得到不确定猜测',
+        }),
+      },
+    });
+
+    await controller.handleFinalTranscript('听不清楚的命令');
+
+    expect(useVoiceStore.getState().pendingCorrection).toBeNull();
+    expect(useDiagramStore.getState().diagram.layout.direction).toBe('top_down');
+    expect(useCommandStore.getState().lastMessage).toContain('请重新描述');
   });
 
   it('keeps Fast Path commands local without calling AI', async () => {

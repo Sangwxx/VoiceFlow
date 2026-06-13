@@ -44,6 +44,8 @@ export function App() {
   const interimTranscript = useVoiceStore((state) => state.interimTranscript);
   const finalTranscript = useVoiceStore((state) => state.finalTranscript);
   const correctedTranscript = useVoiceStore((state) => state.correctedTranscript);
+  const correctionFeedback = useVoiceStore((state) => state.correctionFeedback);
+  const pendingCorrection = useVoiceStore((state) => state.pendingCorrection);
   const voiceError = useVoiceStore((state) => state.error);
   const commandPaused = useVoiceStore((state) => state.commandPaused);
   const lastRoute = useCommandStore((state) => state.lastRouteResult);
@@ -344,6 +346,21 @@ export function App() {
             </section>
           )}
 
+          {pendingCorrection && (
+            <section className={`${styles.panelCard} ${styles.clarificationCard}`}>
+              <div className={styles.sectionHeading}>
+                <span>语义纠错待确认</span>
+                <span>置信度 {Math.round(pendingCorrection.confidence * 100)}%</span>
+              </div>
+              <p className={styles.clarificationQuestion}>
+                “{pendingCorrection.originalText}” → “{pendingCorrection.correctedText}”
+              </p>
+              <p className={styles.resultMessage}>
+                {pendingCorrection.reason}。请说确认或取消。
+              </p>
+            </section>
+          )}
+
           {workflowClarification && (
             <section className={`${styles.panelCard} ${styles.clarificationCard}`}>
               <div className={styles.sectionHeading}>
@@ -411,7 +428,7 @@ export function App() {
         </span>
         <span className={styles.finalTranscript}>
           {correctedTranscript
-            ? `语义纠错：${correctedTranscript}`
+            ? `语义纠错 ${Math.round((correctionFeedback?.confidence ?? 0) * 100)}%：${correctedTranscript}`
             : finalTranscript
               ? `最终：${finalTranscript}`
               : '尚无最终识别文本'}
