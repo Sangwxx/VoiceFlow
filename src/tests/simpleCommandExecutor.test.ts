@@ -151,6 +151,22 @@ describe('simpleCommandExecutor', () => {
     expect(diagram.layout.autoLayout).toBe(false);
   });
 
+  it('understands natural left-right wording and routes the arrow horizontally', async () => {
+    const executor = createSimpleCommandExecutor(speechFeedback);
+
+    await executor.execute('画一个圆做左边，右边是三角形，用箭头连接在一起');
+
+    const diagram = useDiagramStore.getState().diagram;
+    const circle = diagram.nodes.find((node) => node.label === '圆形')!;
+    const triangle = diagram.nodes.find((node) => node.label === '三角形')!;
+    expect(circle.position!.x).toBeLessThan(triangle.position!.x);
+    expect(diagram.edges[0]).toMatchObject({
+      from: circle.id,
+      to: triangle.id,
+      routing: { sourceSide: 'right', targetSide: 'left' },
+    });
+  });
+
   it('renames a numbered shape by its visible object number', async () => {
     const executor = createSimpleCommandExecutor(speechFeedback);
     useDiagramStore.getState().reset(createBlankDiagram());

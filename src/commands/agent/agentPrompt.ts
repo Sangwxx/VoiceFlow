@@ -8,7 +8,7 @@ export function buildAgentPrompt(request: AgentRequest): string {
   const isModification = request.intent === 'modify_diagram';
   return [
     '你是专业图表架构师。你的主要任务是根据用户主题规划准确、完整且有针对性的结构图，而不是套用固定模板。',
-    '只返回紧凑 JSON，不要 Markdown，不要输出坐标、样式、元数据或内部完整 Diagram。',
+    '只返回紧凑 JSON，不要 Markdown。生成完整图时不要输出坐标、样式、元数据或内部完整 Diagram；修改位置时优先输出语义空间 Operation，不要自行计算像素坐标。',
     isModification
       ? '修改现有图表时返回：{"kind":"operations","explanation":"...","summary":"...","operations":[...]}。'
       : '生成图表时返回：{"kind":"diagram","title":"...","diagramType":"...","direction":"top_down|left_to_right","nodes":[{"id":"n1","label":"...","type":"..."}],"edges":[{"from":"n1","to":"n2","label":"可选"}],"groups":[{"label":"可选","nodeIds":["n1"]}],"summary":"..."}。',
@@ -17,7 +17,7 @@ export function buildAgentPrompt(request: AgentRequest): string {
     '节点类型可选：start,end,process,decision,database,service,user,external,group。',
     '支持的连线类型：solid,dashed,highlight,weak。',
     isModification
-      ? 'operations 数组中的每一项都必须包含合法的 Operation type。只允许 apply_layout、create_node、delete_node、update_node、move_node、create_edge、delete_edge、update_edge、insert_node_after。process、user、decision 等是 node.type，绝对不能作为 Operation type。目标必须使用当前图表中的真实 ID；新 ID 必须唯一。不得修改节点 ID、连线 ID 或连线端点。移动节点使用 {"type":"move_node","nodeId":"当前图表真实ID","position":{"x":数字,"y":数字}}。修改文字使用 update_node，并在 patch 中提供 label。'
+      ? 'operations 数组中的每一项都必须包含合法的 Operation type。只允许 apply_layout、create_node、delete_node、update_node、move_node、set_relative_position、align_nodes、create_edge、delete_edge、update_edge、set_edge_endpoints、insert_node_after。process、user、decision 等是 node.type，绝对不能作为 Operation type。目标必须使用当前图表中的真实 ID；新 ID 必须唯一。不得修改节点 ID 或连线 ID。相对定位使用 {"type":"set_relative_position","nodeId":"待移动ID","referenceNodeId":"参考ID","relation":"left_of|right_of|above|below"}；水平或垂直对齐使用 {"type":"align_nodes","nodeIds":["真实ID"],"axis":"horizontal|vertical"}；修改箭头方向使用 {"type":"set_edge_endpoints","edgeId":"真实ID","from":"起点真实ID","to":"终点真实ID"}；修改文字使用 update_node，并在 patch 中提供 label。'
       : '',
     '必须围绕用户给出的具体主题生成内容。不要使用“核心概念、方法与工具、实践应用”等通用占位词，除非用户明确要求。',
     '用户未列出具体节点时，请基于主题知识主动补全合理结构；通常生成 5 到 14 个节点，复杂主题可以更多，但避免无意义堆砌。',
@@ -29,6 +29,7 @@ export function buildAgentPrompt(request: AgentRequest): string {
     request.currentDiagram
       ? `当前图表 JSON：${JSON.stringify(request.currentDiagram)}`
       : '',
+    request.spatialSummary ? `当前画布空间摘要：\n${request.spatialSummary}` : '',
     request.recentCommands?.length
       ? `最近命令：${request.recentCommands.join('；')}`
       : '',

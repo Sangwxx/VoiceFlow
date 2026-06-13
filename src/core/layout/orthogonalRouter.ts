@@ -28,15 +28,26 @@ function routeEdge(
   const target = diagram.nodes.find((node) => node.id === edge.to)!;
   const sourceCenter = center(source);
   const targetCenter = center(target);
-  const back = analysis.backEdgeIds.has(edge.id);
-  const horizontal = diagram.layout.direction === 'left_to_right';
+  const manual = !diagram.layout.autoLayout;
+  const deltaX = targetCenter.x - sourceCenter.x;
+  const deltaY = targetCenter.y - sourceCenter.y;
+  const back = !manual && analysis.backEdgeIds.has(edge.id);
+  const horizontal = manual
+    ? Math.abs(deltaX) >= Math.abs(deltaY)
+    : diagram.layout.direction === 'left_to_right';
   const kind = back ? 'back' : analysis.branchEdgeIds.has(edge.id) ? 'branch' : 'forward';
-  let sourceSide: EdgeSide = horizontal ? 'right' : 'bottom';
-  let targetSide: EdgeSide = horizontal ? 'left' : 'top';
+  let sourceSide: EdgeSide = horizontal
+    ? deltaX >= 0
+      ? 'right'
+      : 'left'
+    : deltaY >= 0
+      ? 'bottom'
+      : 'top';
+  let targetSide: EdgeSide = oppositeSide(sourceSide);
   if (back) {
     sourceSide = horizontal ? 'top' : 'left';
     targetSide = horizontal ? 'top' : 'left';
-  } else if (kind === 'branch') {
+  } else if (!manual && kind === 'branch') {
     const delta = horizontal
       ? targetCenter.y - sourceCenter.y
       : targetCenter.x - sourceCenter.x;
@@ -68,6 +79,10 @@ function routeEdge(
     points = [start, { x: start.x, y: middle }, { x: end.x, y: middle }, end];
   }
   return { sourceSide, targetSide, points: removeDuplicatePoints(points), kind };
+}
+
+function oppositeSide(side: EdgeSide): EdgeSide {
+  return { top: 'bottom', right: 'left', bottom: 'top', left: 'right' }[side] as EdgeSide;
 }
 
 function center(node: Diagram['nodes'][number]): Position {

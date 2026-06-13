@@ -22,6 +22,7 @@ export type AgentRequest = {
   originalCommand: string;
   conversation: AgentConversationTurn[];
   currentDiagram?: Diagram;
+  spatialSummary?: string;
   recentCommands?: string[];
 };
 

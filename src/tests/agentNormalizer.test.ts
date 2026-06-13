@@ -138,4 +138,46 @@ describe('normalizeAgentResult', () => {
     ).toEqual({ x: 120, y: 860 });
     expect(result.diagram.layout.autoLayout).toBe(false);
   });
+
+  it('normalizes semantic spatial and edge direction operations', () => {
+    const result = normalizeAgentResult(
+      {
+        kind: 'operations',
+        operations: [
+          {
+            type: 'set_relative_position',
+            nodeId: 'login-page',
+            referenceNodeId: 'open-app',
+            relation: 'right_of',
+          },
+          {
+            type: 'align_nodes',
+            nodeIds: ['open-app', 'login-page'],
+            axis: 'horizontal',
+          },
+          {
+            type: 'set_edge_endpoints',
+            edgeId: 'e-start-open',
+            from: 'open-app',
+            to: 'start',
+          },
+        ],
+      },
+      loginFlowDiagram,
+    );
+
+    expect(result.kind).toBe('operations');
+    if (result.kind !== 'operations') return;
+    expect(result.operations.map((operation) => operation.type)).toEqual([
+      'set_relative_position',
+      'align_nodes',
+      'set_edge_endpoints',
+    ]);
+    expect(result.diagram.edges.find((edge) => edge.id === 'e-start-open')).toMatchObject(
+      {
+        from: 'open-app',
+        to: 'start',
+      },
+    );
+  });
 });

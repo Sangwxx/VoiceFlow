@@ -7,6 +7,7 @@ import type { FastCommandExecutionResult } from '../fast/fastCommandExecutor';
 import { normalizeAgentResult } from './agentNormalizer';
 import type { AgentIntent, AiProvider } from './agentTypes';
 import { planLocalStructuralDiagram } from './structuralDiagramPlanner';
+import { describeDiagramSpatially } from '../../core/diagram/spatialSummary';
 
 export function createAgentCommandExecutor(
   provider: AiProvider,
@@ -85,6 +86,8 @@ export function createAgentCommandExecutor(
         originalCommand,
         conversation: state.conversation,
         currentDiagram: intent === 'modify_diagram' ? diagram : undefined,
+        spatialSummary:
+          intent === 'modify_diagram' ? describeDiagramSpatially(diagram) : undefined,
         recentCommands: useCommandStore
           .getState()
           .executionLog.slice(0, 5)

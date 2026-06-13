@@ -158,6 +158,33 @@ describe('agentCommandExecutor', () => {
     });
   });
 
+  it('provides a semantic canvas summary for contextual modifications', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      kind: 'operations',
+      operations: [
+        {
+          type: 'set_relative_position',
+          nodeId: 'login-page',
+          referenceNodeId: 'open-app',
+          relation: 'right_of',
+        },
+      ],
+    });
+    const executor = createAgentCommandExecutor(
+      { mode: 'real', model: 'test-model', complete },
+      feedback,
+    );
+
+    await executor.execute('把登录页放到打开 App 右边', 'modify_diagram');
+
+    expect(complete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        spatialSummary: expect.stringContaining('节点空间关系'),
+      }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
   it('uses the local planner only when AI is not configured', async () => {
     const executor = createAgentCommandExecutor(
       { mode: 'unconfigured', model: '', complete: vi.fn() },

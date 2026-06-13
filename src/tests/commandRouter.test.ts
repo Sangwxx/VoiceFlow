@@ -40,6 +40,18 @@ describe('routeCommand', () => {
       route: 'agent',
       agentIntent: 'modify_diagram',
     });
+    expect(routeCommand('箭头是三角形指向圆形')).toMatchObject({
+      route: 'agent',
+      agentIntent: 'modify_diagram',
+    });
+    expect(routeCommand('圆形在三角形左边')).toMatchObject({
+      route: 'agent',
+      agentIntent: 'modify_diagram',
+    });
+    expect(routeCommand('让圆形和三角形水平对齐')).toMatchObject({
+      route: 'agent',
+      agentIntent: 'modify_diagram',
+    });
   });
 
   it('routes all complete structural diagrams through one generic Agent intent', () => {

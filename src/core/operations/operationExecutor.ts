@@ -2,6 +2,13 @@ import type { Diagram, DiagramEdge } from '../diagram/diagramTypes';
 import { cloneDiagram } from '../diagram/diagramUtils';
 import { validateDiagram } from '../diagram/diagramValidators';
 import { defaultLayoutEngine } from '../layout/layoutEngine';
+import {
+  alignNodes,
+  setEdgeEndpoints,
+  setRelativePosition,
+} from '../layout/spatialConstraintSolver';
+import { analyzeGraph } from '../layout/graphAnalysis';
+import { routeOrthogonalEdges } from '../layout/orthogonalRouter';
 import type { DiagramOperation } from './operationTypes';
 import { validateOperation } from './operationValidator';
 
@@ -79,9 +86,22 @@ function applyOperation(diagram: Diagram, operation: DiagramOperation): Diagram 
           ? { ...node, position: { ...operation.position } }
           : node,
       );
-      diagram.edges = diagram.edges.map((edge) => ({ ...edge, routing: undefined }));
       diagram.layout.autoLayout = false;
+      if (diagram.nodes.every((node) => node.position)) {
+        return routeOrthogonalEdges(diagram, analyzeGraph(diagram));
+      }
+      diagram.edges = diagram.edges.map((edge) => ({ ...edge, routing: undefined }));
       return diagram;
+    case 'set_relative_position':
+      return setRelativePosition(
+        diagram,
+        operation.nodeId,
+        operation.referenceNodeId,
+        operation.relation,
+        operation.gap,
+      );
+    case 'align_nodes':
+      return alignNodes(diagram, operation.nodeIds, operation.axis);
     case 'create_edge':
       diagram.edges.push(cloneEdge(operation.edge));
       return diagram;
@@ -101,6 +121,8 @@ function applyOperation(diagram: Diagram, operation: DiagramOperation): Diagram 
           : edge,
       );
       return diagram;
+    case 'set_edge_endpoints':
+      return setEdgeEndpoints(diagram, operation.edgeId, operation.from, operation.to);
     case 'insert_node_after':
       return insertNodeAfter(diagram, operation);
   }

@@ -60,4 +60,14 @@ describe('matchGenericDrawingActions', () => {
       expect.objectContaining({ label: '圆形', placement: 'right' }),
     ]);
   });
+
+  it('understands natural role-based and reversed placement wording', () => {
+    const actions = matchGenericDrawingActions('画一个圆做左边右边是三角形用箭头连接');
+
+    expect(actions).toHaveLength(2);
+    expect(actions).toEqual([
+      expect.objectContaining({ label: '圆形', placement: 'left' }),
+      expect.objectContaining({ label: '三角形', placement: 'right' }),
+    ]);
+  });
 });

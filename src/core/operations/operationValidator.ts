@@ -1,4 +1,5 @@
 import { EDGE_TYPES, NODE_TYPES, type Diagram } from '../diagram/diagramTypes';
+import { ALIGNMENT_AXES, SPATIAL_RELATIONS } from '../diagram/spatialTypes';
 import type { DiagramOperation } from './operationTypes';
 
 export class OperationValidationError extends Error {
@@ -55,6 +56,31 @@ export function validateOperation(diagram: Diagram, operation: DiagramOperation)
         throw new OperationValidationError('节点类型不受支持。');
       }
       return;
+    case 'set_relative_position':
+      requireExisting(nodeIds, operation.nodeId, '节点');
+      requireExisting(nodeIds, operation.referenceNodeId, '参考节点');
+      if (operation.nodeId === operation.referenceNodeId) {
+        throw new OperationValidationError('节点不能相对自身定位。');
+      }
+      if (!SPATIAL_RELATIONS.includes(operation.relation)) {
+        throw new OperationValidationError('相对位置关系不受支持。');
+      }
+      if (
+        operation.gap !== undefined &&
+        (!Number.isFinite(operation.gap) || operation.gap < 0)
+      ) {
+        throw new OperationValidationError('节点间距必须是非负有效数字。');
+      }
+      return;
+    case 'align_nodes':
+      if (operation.nodeIds.length < 2) {
+        throw new OperationValidationError('对齐操作至少需要两个节点。');
+      }
+      operation.nodeIds.forEach((id) => requireExisting(nodeIds, id, '节点'));
+      if (!ALIGNMENT_AXES.includes(operation.axis)) {
+        throw new OperationValidationError('对齐方向不受支持。');
+      }
+      return;
     case 'create_edge':
       validateNewEdge(
         diagram,
@@ -87,6 +113,24 @@ export function validateOperation(diagram: Diagram, operation: DiagramOperation)
         !EDGE_TYPES.includes(operation.patch.type)
       ) {
         throw new OperationValidationError('连线类型不受支持。');
+      }
+      return;
+    case 'set_edge_endpoints':
+      requireExisting(edgeIds, operation.edgeId, '连线');
+      requireExisting(nodeIds, operation.from, '连线起点');
+      requireExisting(nodeIds, operation.to, '连线终点');
+      if (operation.from === operation.to) {
+        throw new OperationValidationError('不允许节点连接到自身。');
+      }
+      if (
+        diagram.edges.some(
+          (edge) =>
+            edge.id !== operation.edgeId &&
+            edge.from === operation.from &&
+            edge.to === operation.to,
+        )
+      ) {
+        throw new OperationValidationError('相同起点和终点的连线已存在。');
       }
       return;
     case 'insert_node_after':

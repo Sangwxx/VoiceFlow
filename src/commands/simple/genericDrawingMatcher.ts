@@ -129,11 +129,17 @@ function parseShapePlacement(
   shape: string,
 ): Extract<SimpleOperationDraft, { intent: 'create_node' }>['placement'] {
   const escapedShape = shape.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = text.match(
-    new RegExp(
-      `${escapedShape}(?:在|放在|位于)?(最左边|最左侧|左边|左侧|最右边|最右侧|右边|右侧|最上方|最上面|上方|上边|顶部|最下方|最下面|下方|下边|底部|中间|中央|中心)`,
-    ),
-  );
+  const match =
+    text.match(
+      new RegExp(
+        `${escapedShape}(?:在|放在|位于|做|作为)?(最左边|最左侧|左边|左侧|最右边|最右侧|右边|右侧|最上方|最上面|上方|上边|顶部|最下方|最下面|下方|下边|底部|中间|中央|中心)`,
+      ),
+    ) ??
+    text.match(
+      new RegExp(
+        `(最左边|最左侧|左边|左侧|最右边|最右侧|右边|右侧|最上方|最上面|上方|上边|顶部|最下方|最下面|下方|下边|底部|中间|中央|中心)(?:是|为|放|放置)?${escapedShape}`,
+      ),
+    );
   if (!match) return undefined;
   const placementText = match[1];
   if (/左边|左侧|最左/.test(placementText)) return 'left';

@@ -61,6 +61,14 @@ function verifyExpectedChange(
           oldNode.position?.y !== newNode.position?.y),
       );
     }
+    case 'set_relative_position':
+    case 'align_nodes':
+      return before.nodes.some((node) => {
+        const next = findNode(after, node.id);
+        return (
+          node.position?.x !== next?.position?.x || node.position?.y !== next?.position?.y
+        );
+      });
     case 'create_edge':
       return (
         !findEdge(before, operation.edge.id) &&
@@ -75,6 +83,15 @@ function verifyExpectedChange(
       const newEdge = findEdge(after, operation.edgeId);
       return Boolean(
         oldEdge && newEdge && patchChanged(oldEdge, newEdge, operation.patch),
+      );
+    }
+    case 'set_edge_endpoints': {
+      const oldEdge = findEdge(before, operation.edgeId);
+      const newEdge = findEdge(after, operation.edgeId);
+      return Boolean(
+        oldEdge &&
+        newEdge &&
+        (oldEdge.from !== newEdge.from || oldEdge.to !== newEdge.to),
       );
     }
     case 'insert_node_after':
