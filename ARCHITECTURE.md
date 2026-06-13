@@ -5,6 +5,7 @@
 ```text
 Web Speech API
   -> VoiceController
+  -> Dynamic Voice Task Segmenter / Ordered Queue
   -> Command Router
      -> Fast Path
      -> Simple Path
@@ -22,6 +23,8 @@ Web Speech API
 - Diagram JSON is the only persisted drawing data source.
 - React components render state and never directly edit Diagram JSON.
 - Fast commands bypass AI.
+- Interim and final ASR results are segmented into ordered voice tasks.
+- Complete low-risk tasks may execute before recording ends; complex tasks wait, and later tasks never overtake an earlier queued task.
 - Simple commands produce validated Operations.
 - Agent output is normalized and validated before becoming a Proposal.
 - Full Diagram replacements and contextual Agent Operation batches require a voice-confirmed Proposal.

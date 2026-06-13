@@ -30,4 +30,8 @@ export class MockVoiceProvider implements VoiceProvider {
   emitError(error: Error): void {
     this.callbacks?.onError?.(error);
   }
+
+  emitSilence(): void {
+    if (this.listening) this.callbacks?.onSilence?.();
+  }
 }

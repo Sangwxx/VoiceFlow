@@ -8,6 +8,7 @@ export type VoiceProviderCallbacks = {
   onStart?: () => void;
   onEnd?: () => void;
   onError?: (error: Error) => void;
+  onSilence?: () => void;
 };
 
 export interface VoiceProvider {
@@ -20,6 +21,7 @@ export type VoiceController = {
   startListening(): void;
   stopListening(): void;
   handleFinalTranscript(text: string): Promise<void>;
+  finishUtterance(): Promise<void>;
   pauseForFeedback(): void;
   resumeAfterFeedback(): void;
 };

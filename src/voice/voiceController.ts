@@ -17,6 +17,7 @@ import { createWorkflowCommandExecutor } from '../commands/workflow/workflowComm
 import { useWorkflowStore } from '../stores/workflowStore';
 import { useProposalStore } from '../stores/proposalStore';
 import { useDiagramStore } from '../stores/diagramStore';
+import { VoiceTaskSegmenter, type VoiceTask } from './voiceTaskSegmenter';
 
 export type VoiceControllerDependencies = {
   provider: VoiceProvider;
@@ -31,13 +32,98 @@ export function createVoiceController({
 }: VoiceControllerDependencies): VoiceController {
   let shouldListen = false;
   let pausedForFeedback = false;
-  const executeFastCommand = createFastCommandExecutor({ speechFeedback });
-  const simpleExecutor = createSimpleCommandExecutor(speechFeedback);
-  const agentExecutor = createAgentCommandExecutor(aiProvider, speechFeedback);
-  const workflowExecutor = createWorkflowCommandExecutor(speechFeedback);
+  let utteranceEnded = true;
+  let drainingTasks = false;
+  let drainRequested = false;
+  let taskCursor = 0;
+  let tasks: VoiceTask[] = [];
+  const resolutionTaskIds = new Set<string>();
+  let suppressFeedback = false;
+  const segmenter = new VoiceTaskSegmenter();
+  const executionFeedback: SpeechFeedbackService = {
+    isSupported: () => speechFeedback.isSupported(),
+    speak: (text) => (suppressFeedback ? Promise.resolve() : speechFeedback.speak(text)),
+  };
+  const executeFastCommand = createFastCommandExecutor({
+    speechFeedback: executionFeedback,
+  });
+  const simpleExecutor = createSimpleCommandExecutor(executionFeedback);
+  const agentExecutor = createAgentCommandExecutor(aiProvider, executionFeedback);
+  const workflowExecutor = createWorkflowCommandExecutor(executionFeedback);
+
+  function publishTasks(): void {
+    useVoiceStore.getState().setTaskQueue([...tasks]);
+  }
+
+  function appendTasks(nextTasks: VoiceTask[]): void {
+    if (!nextTasks.length) return;
+    if (hasInteractionBlocker()) {
+      nextTasks.forEach((task) => resolutionTaskIds.add(task.id));
+      const insertionIndex =
+        tasks[taskCursor]?.status === 'executing' ? taskCursor + 1 : taskCursor;
+      tasks.splice(insertionIndex, 0, ...nextTasks);
+    } else {
+      tasks.push(...nextTasks);
+    }
+    publishTasks();
+    void drainTasks();
+  }
+
+  function hasInteractionBlocker(): boolean {
+    const workflow = useWorkflowStore.getState();
+    return Boolean(
+      useProposalStore.getState().proposal ||
+      useVoiceStore.getState().pendingCorrection ||
+      useCommandStore.getState().pendingClarification ||
+      useAgentStore.getState().status === 'clarifying' ||
+      workflow.pendingVersionClarification ||
+      workflow.pendingFocusClarification,
+    );
+  }
+
+  async function drainTasks(): Promise<void> {
+    if (drainingTasks) {
+      drainRequested = true;
+      return;
+    }
+    drainingTasks = true;
+    drainRequested = false;
+    try {
+      while (taskCursor < tasks.length) {
+        const task = tasks[taskCursor];
+        if (task.readiness === 'after_recording' && !utteranceEnded) break;
+        if (hasInteractionBlocker() && !resolutionTaskIds.has(task.id)) break;
+        task.status = 'executing';
+        publishTasks();
+        suppressFeedback = !utteranceEnded;
+        try {
+          await controller.handleFinalTranscript(task.text);
+          task.status = 'completed';
+        } catch {
+          task.status = 'failed';
+        } finally {
+          suppressFeedback = false;
+          resolutionTaskIds.delete(task.id);
+          taskCursor += 1;
+          publishTasks();
+        }
+        if (hasInteractionBlocker()) break;
+      }
+    } finally {
+      drainingTasks = false;
+      if (drainRequested) void drainTasks();
+    }
+  }
 
   const controller: VoiceController = {
     startListening() {
+      if (utteranceEnded && taskCursor >= tasks.length) {
+        tasks = [];
+        taskCursor = 0;
+        segmenter.reset();
+        publishTasks();
+      }
+      utteranceEnded = false;
       shouldListen = true;
       if (!provider.isSupported()) {
         useVoiceStore.setState({
@@ -62,18 +148,36 @@ export function createVoiceController({
           if (!shouldListen) return;
           if (isFinal) {
             useVoiceStore.getState().setFinalTranscript(text);
-            void controller.handleFinalTranscript(text);
+            appendTasks(segmenter.ingestFinal(text));
           } else {
             useVoiceStore.getState().setInterimTranscript(text);
+            appendTasks(segmenter.ingestInterim(text));
           }
         },
         onError: (error) => useVoiceStore.getState().setError(error.message),
+        onSilence: () => {
+          shouldListen = false;
+          void controller.finishUtterance();
+        },
       });
     },
     stopListening() {
       shouldListen = false;
       provider.stop();
-      useVoiceStore.getState().setStatus('idle');
+      void controller.finishUtterance();
+    },
+    async finishUtterance() {
+      utteranceEnded = true;
+      segmenter.reset();
+      tasks = tasks.map((task) =>
+        task.status === 'waiting_recording_end' ? { ...task, status: 'queued' } : task,
+      );
+      publishTasks();
+      await drainTasks();
+      const voice = useVoiceStore.getState();
+      voice.setStatus(
+        voice.commandPaused ? 'paused' : shouldListen ? 'listening' : 'idle',
+      );
     },
     async handleFinalTranscript(text: string) {
       const startedAt = performance.now();

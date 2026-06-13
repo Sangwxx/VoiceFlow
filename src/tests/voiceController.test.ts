@@ -91,6 +91,79 @@ describe('voiceController integration', () => {
     });
   });
 
+  it('executes a complete low-risk interim task while speech continues', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+
+    controller.startListening();
+    provider.emitInterim('横向布局，然后我继续说');
+
+    await vi.waitFor(() => {
+      expect(useDiagramStore.getState().diagram.layout.direction).toBe('left_to_right');
+      expect(useVoiceStore.getState().taskQueue[0]).toMatchObject({
+        text: '横向布局',
+        status: 'completed',
+      });
+    });
+  });
+
+  it('keeps strict order when a complex task precedes an immediate task', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+
+    controller.startListening();
+    provider.emitFinal('加一个节点叫人工审核，然后横向布局');
+    await Promise.resolve();
+
+    expect(useDiagramStore.getState().diagram.layout.direction).toBe('top_down');
+    expect(
+      useDiagramStore.getState().diagram.nodes.some((node) => node.label === '人工审核'),
+    ).toBe(false);
+
+    provider.emitSilence();
+    await vi.waitFor(() => {
+      expect(useDiagramStore.getState().diagram.layout.direction).toBe('left_to_right');
+      expect(
+        useDiagramStore
+          .getState()
+          .diagram.nodes.some((node) => node.label === '人工审核'),
+      ).toBe(true);
+    });
+    expect(useCommandStore.getState().executionLog.map((entry) => entry.rawText)).toEqual(
+      ['横向布局', '加一个节点叫人工审核'],
+    );
+    expect(useVoiceStore.getState().taskQueue.map((task) => task.status)).toEqual([
+      'completed',
+      'completed',
+    ]);
+  });
+
+  it('pauses the ordered queue for confirmation and resumes after the answer', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+
+    controller.startListening();
+    provider.emitFinal('整理成适合汇报的版本，然后横向布局');
+    provider.emitSilence();
+    await vi.waitFor(() => {
+      expect(useProposalStore.getState().proposal?.source).toBe('report_mode');
+    });
+    expect(useDiagramStore.getState().diagram.layout.direction).toBe('top_down');
+
+    controller.startListening();
+    provider.emitFinal('确认');
+    expect(useVoiceStore.getState().taskQueue.map((task) => task.text)).toEqual([
+      '整理成适合汇报的版本',
+      '确认',
+      '横向布局',
+    ]);
+    provider.emitSilence();
+    await vi.waitFor(() => {
+      expect(useProposalStore.getState().proposal).toBeNull();
+      expect(useDiagramStore.getState().diagram.layout.direction).toBe('left_to_right');
+    });
+  });
+
   it('ignores recognition results that arrive after listening stops', async () => {
     const provider = new MockVoiceProvider();
     const controller = createTestController(provider);

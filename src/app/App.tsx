@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo } from 'react';
 
 import { CanvasErrorBoundary } from '../components/common/CanvasErrorBoundary';
 import { VisualClarificationCard } from '../components/common/VisualClarificationCard';
@@ -49,6 +49,7 @@ export function App() {
   const pendingCorrection = useVoiceStore((state) => state.pendingCorrection);
   const voiceError = useVoiceStore((state) => state.error);
   const commandPaused = useVoiceStore((state) => state.commandPaused);
+  const voiceTasks = useVoiceStore((state) => state.taskQueue);
   const lastRoute = useCommandStore((state) => state.lastRouteResult);
   const executionLog = useCommandStore((state) => state.executionLog);
   const lastMessage = useCommandStore((state) => state.lastMessage);
@@ -67,7 +68,7 @@ export function App() {
   const focusedNodeId = useCanvasViewStore((state) => state.focusedNodeId);
   const selectedNodeId = useDiagramStore((state) => state.selectedNodeId);
   const controller = useMemo(() => createBrowserVoiceController(), []);
-  const [recordingEnabled, setRecordingEnabled] = useState(false);
+  const recordingEnabled = voiceStatus !== 'idle' && voiceStatus !== 'unsupported';
   const latestExecution = executionLog[0];
   const averageDuration = executionLog.length
     ? Math.round(
@@ -138,6 +139,23 @@ export function App() {
         <aside className={styles.leftPanel} aria-label="语音控制状态">
           <section className={styles.panelCard}>
             <div className={styles.sectionHeading}>
+              <span>动态语音任务队列</span>
+              <span className={styles.successLabel}>{voiceTasks.length}</span>
+            </div>
+            <ol className={styles.commandList}>
+              {voiceTasks.length ? (
+                voiceTasks.map((task) => (
+                  <li key={task.id}>
+                    {task.sequence}. {task.text} · {task.status}
+                  </li>
+                ))
+              ) : (
+                <li>边听、边切分、按顺序执行</li>
+              )}
+            </ol>
+          </section>
+          <section className={styles.panelCard}>
+            <div className={styles.sectionHeading}>
               <span>语音状态</span>
               <span className={`${styles.statusDot} ${styles[voiceStatus]}`} />
             </div>
@@ -162,7 +180,6 @@ export function App() {
                 } else {
                   controller.startListening();
                 }
-                setRecordingEnabled((enabled) => !enabled);
               }}
             >
               {recordingEnabled ? '停止语音输入' : '开始语音输入'}

@@ -9,6 +9,8 @@ export type WebSpeechProviderOptions = {
   getWindow?: () => Window | undefined;
 };
 
+const SILENCE_TIMEOUT_MS = 3000;
+
 export class WebSpeechProvider implements VoiceProvider {
   private recognition: ReturnType<SpeechRecognitionConstructor> | null = null;
   private callbacks: VoiceProviderCallbacks | null = null;
@@ -16,6 +18,8 @@ export class WebSpeechProvider implements VoiceProvider {
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly restartDelayMs: number;
   private readonly getWindow: () => Window | undefined;
+  private silenceTimer: ReturnType<typeof setTimeout> | null = null;
+  private hasReceivedSpeech = false;
 
   constructor(options: WebSpeechProviderOptions = {}) {
     this.restartDelayMs = options.restartDelayMs ?? 250;
@@ -30,7 +34,9 @@ export class WebSpeechProvider implements VoiceProvider {
   start(callbacks: VoiceProviderCallbacks): void {
     this.callbacks = callbacks;
     this.intentionallyStopped = false;
+    this.hasReceivedSpeech = false;
     this.clearRestartTimer();
+    this.clearSilenceTimer();
 
     if (!this.isSupported()) {
       callbacks.onError?.(new Error('当前浏览器不支持 Web Speech API'));
@@ -52,6 +58,7 @@ export class WebSpeechProvider implements VoiceProvider {
   stop(): void {
     this.intentionallyStopped = true;
     this.clearRestartTimer();
+    this.clearSilenceTimer();
     try {
       this.recognition?.stop();
     } catch {
@@ -90,10 +97,18 @@ export class WebSpeechProvider implements VoiceProvider {
   }
 
   private handleResult(event: SpeechRecognitionEventLike): void {
+    let foundText = false;
     for (let index = event.resultIndex; index < event.results.length; index += 1) {
       const result = event.results[index];
       const text = result[0]?.transcript?.trim();
-      if (text) this.callbacks?.onResult({ text, isFinal: result.isFinal });
+      if (text) {
+        foundText = true;
+        this.callbacks?.onResult({ text, isFinal: result.isFinal });
+      }
+    }
+    if (foundText) {
+      this.hasReceivedSpeech = true;
+      this.resetSilenceTimer();
     }
   }
 
@@ -107,6 +122,25 @@ export class WebSpeechProvider implements VoiceProvider {
   private clearRestartTimer(): void {
     if (this.restartTimer) clearTimeout(this.restartTimer);
     this.restartTimer = null;
+  }
+
+  private resetSilenceTimer(): void {
+    this.clearSilenceTimer();
+    this.silenceTimer = setTimeout(() => {
+      if (this.callbacks && this.hasReceivedSpeech) {
+        this.intentionallyStopped = true;
+        this.clearRestartTimer();
+        this.recognition?.stop();
+        this.callbacks.onSilence?.();
+      }
+    }, SILENCE_TIMEOUT_MS);
+  }
+
+  private clearSilenceTimer(): void {
+    if (this.silenceTimer) {
+      clearTimeout(this.silenceTimer);
+      this.silenceTimer = null;
+    }
   }
 }
 
