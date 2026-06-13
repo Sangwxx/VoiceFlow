@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { App } from '../app/App';
@@ -30,7 +31,26 @@ describe('competition app', () => {
     expect(screen.getByText('历史状态')).toBeInTheDocument();
     expect(screen.getByText('最近命令')).toBeInTheDocument();
     expect(screen.getByText('实时字幕')).toBeInTheDocument();
-    expect(screen.getAllByText('浏览器不支持')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: '开始语音输入' })).toBeInTheDocument();
+    expect(screen.getAllByText('等待启动')).toHaveLength(2);
+  });
+
+  it('starts and stops microphone input explicitly', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const start = screen.getByRole('button', { name: '开始语音输入' });
+    await user.click(start);
+    expect(screen.getByRole('button', { name: '停止语音输入' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    await user.click(screen.getByRole('button', { name: '停止语音输入' }));
+    expect(screen.getByRole('button', { name: '开始语音输入' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
   });
 
   it('shows pending clarification candidates', () => {

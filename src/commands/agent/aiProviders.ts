@@ -137,7 +137,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
     },
   ) {
     this.model = config.model;
-    this.fetchImpl = config.fetchImpl ?? fetch;
+    this.fetchImpl = config.fetchImpl ?? ((...args) => fetch(...args));
   }
 
   async complete(request: AgentRequest, options?: { signal?: AbortSignal }) {

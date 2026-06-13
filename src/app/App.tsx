@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 
 import { CanvasErrorBoundary } from '../components/common/CanvasErrorBoundary';
 import { VisualClarificationCard } from '../components/common/VisualClarificationCard';
@@ -67,6 +67,7 @@ export function App() {
   const focusedNodeId = useCanvasViewStore((state) => state.focusedNodeId);
   const selectedNodeId = useDiagramStore((state) => state.selectedNodeId);
   const controller = useMemo(() => createBrowserVoiceController(), []);
+  const [recordingEnabled, setRecordingEnabled] = useState(false);
   const latestExecution = executionLog[0];
   const averageDuration = executionLog.length
     ? Math.round(
@@ -97,7 +98,6 @@ export function App() {
   );
 
   useEffect(() => {
-    controller.startListening();
     return () => controller.stopListening();
   }, [controller]);
 
@@ -150,11 +150,30 @@ export function App() {
               <span />
             </div>
             <strong>{STATUS_LABELS[voiceStatus]}</strong>
+            <button
+              className={`${styles.recordingButton} ${
+                recordingEnabled ? styles.recordingButtonActive : ''
+              }`}
+              type="button"
+              aria-pressed={recordingEnabled}
+              onClick={() => {
+                if (recordingEnabled) {
+                  controller.stopListening();
+                } else {
+                  controller.startListening();
+                }
+                setRecordingEnabled((enabled) => !enabled);
+              }}
+            >
+              {recordingEnabled ? '停止语音输入' : '开始语音输入'}
+            </button>
             <p>
               {voiceError ??
                 (commandPaused
                   ? '仅响应继续、取消和确认'
-                  : '首次使用请允许浏览器访问麦克风。')}
+                  : recordingEnabled
+                    ? '正在持续监听，完成后请停止语音输入。'
+                    : '点击开始后，请允许浏览器访问麦克风。')}
             </p>
           </section>
           <section className={styles.panelCard}>
