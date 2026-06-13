@@ -115,4 +115,27 @@ describe('normalizeAgentResult', () => {
       ),
     ).toThrow(/不存在/);
   });
+
+  it('normalizes a controlled node movement operation', () => {
+    const result = normalizeAgentResult(
+      {
+        kind: 'operations',
+        operations: [
+          {
+            type: 'move_node',
+            nodeId: 'login-page',
+            position: { x: 120, y: 860 },
+          },
+        ],
+      },
+      loginFlowDiagram,
+    );
+
+    expect(result.kind).toBe('operations');
+    if (result.kind !== 'operations') return;
+    expect(
+      result.diagram.nodes.find((node) => node.id === 'login-page')?.position,
+    ).toEqual({ x: 120, y: 860 });
+    expect(result.diagram.layout.autoLayout).toBe(false);
+  });
 });

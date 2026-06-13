@@ -52,14 +52,30 @@ export function matchGenericDrawingActions(text: string): SimpleOperationDraft[]
     `([一二两三四五六七八九十\\d]*)(?:个|张|颗|只)?(红色|蓝色|绿色|黄色|灰色|紫色|橙色)?(${SHAPES.join('|')})`,
     'g',
   );
-  return [...content.matchAll(pattern)].flatMap((match) =>
-    Array.from({ length: parseCount(match[1]) }, () =>
-      createShapeDraft(match[3], match[2]),
-    ),
-  );
+  const seenShapes = new Set<string>();
+  const matches = [...content.matchAll(pattern)].filter((match) => {
+    const after = content.slice((match.index ?? 0) + match[0].length);
+    const isPlacementReference =
+      seenShapes.has(match[3]) &&
+      /^(?:在|放在|位于)?(?:最左边|最左侧|左边|左侧|最右边|最右侧|右边|右侧|最上方|最上面|上方|上边|顶部|最下方|最下面|下方|下边|底部|中间|中央|中心)/.test(
+        after,
+      );
+    seenShapes.add(match[3]);
+    return !isPlacementReference;
+  });
+  return matches.flatMap((match) => {
+    const placement = parseShapePlacement(content, match[3]);
+    return Array.from({ length: parseCount(match[1]) }, () =>
+      createShapeDraft(match[3], match[2], placement),
+    );
+  });
 }
 
-function createShapeDraft(shape: string, color?: string): SimpleOperationDraft {
+function createShapeDraft(
+  shape: string,
+  color?: string,
+  placement?: Extract<SimpleOperationDraft, { intent: 'create_node' }>['placement'],
+): SimpleOperationDraft {
   const square = shape === '正方形' || shape === '方形';
   const circle = shape === '圆形' || shape === '圆';
   const diamond = shape === '菱形';
@@ -104,7 +120,28 @@ function createShapeDraft(shape: string, color?: string): SimpleOperationDraft {
             ? 'polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 92%, 50% 70%, 21% 92%, 32% 57%, 2% 35%, 39% 35%)'
             : undefined,
     },
+    placement,
   };
+}
+
+function parseShapePlacement(
+  text: string,
+  shape: string,
+): Extract<SimpleOperationDraft, { intent: 'create_node' }>['placement'] {
+  const escapedShape = shape.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = text.match(
+    new RegExp(
+      `${escapedShape}(?:在|放在|位于)?(最左边|最左侧|左边|左侧|最右边|最右侧|右边|右侧|最上方|最上面|上方|上边|顶部|最下方|最下面|下方|下边|底部|中间|中央|中心)`,
+    ),
+  );
+  if (!match) return undefined;
+  const placementText = match[1];
+  if (/左边|左侧|最左/.test(placementText)) return 'left';
+  if (/右边|右侧|最右/.test(placementText)) return 'right';
+  if (/上边|上方|顶部|最上/.test(placementText)) return 'top';
+  if (/下边|下方|底部|最下/.test(placementText)) return 'bottom';
+  if (/中间|中央|中心/.test(placementText)) return 'center';
+  return undefined;
 }
 
 function parseCount(value: string): number {

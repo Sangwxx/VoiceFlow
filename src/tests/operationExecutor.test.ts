@@ -38,6 +38,22 @@ describe('executeOperation', () => {
     ).toThrow('节点 "missing" 不存在');
   });
 
+  it('moves a node without triggering automatic layout', () => {
+    const result = executeOperation(loginFlowDiagram, {
+      id: 'move-login',
+      type: 'move_node',
+      nodeId: 'login-page',
+      position: { x: 40, y: 900 },
+      timestamp: '2026-06-12T10:00:00.000Z',
+    });
+
+    expect(result.nodes.find((node) => node.id === 'login-page')?.position).toEqual({
+      x: 40,
+      y: 900,
+    });
+    expect(result.layout.autoLayout).toBe(false);
+  });
+
   it('creates, updates and deletes nodes and edges without mutating input', () => {
     const input = structuredClone(loginFlowDiagram);
     const snapshot = structuredClone(input);

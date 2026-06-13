@@ -31,6 +31,7 @@ export function parseSimpleCommand(text: string): SimpleParseResult {
   }
   const draft =
     parseDuplicateNode(normalized) ??
+    parseMoveNode(normalized) ??
     parseResizeNode(normalized) ??
     parseCreateShape(normalized) ??
     parseInsertNode(normalized) ??
@@ -46,6 +47,18 @@ export function parseSimpleCommand(text: string): SimpleParseResult {
   return draft
     ? { status: 'ready', intent: draft.intent, draft }
     : { status: 'invalid', message: '没有理解这条简单绘图指令，请换一种说法。' };
+}
+
+function parseMoveNode(text: string): SimpleOperationDraft | null {
+  const match = text.match(
+    /^(?:把|将)(.+?)(?:移动到|移到|放到|挪到)(最左边|最左侧|左边|左侧|最右边|最右侧|右边|右侧|最上方|最上面|上方|上边|顶部|最下方|最下面|下方|下边|底部|中间|中央|中心)$/,
+  );
+  if (!match) return null;
+  return {
+    intent: 'move_node',
+    targetText: cleanNodeText(match[1]),
+    placement: parsePlacement(match[2]),
+  };
 }
 
 function parseDuplicateNode(text: string): SimpleOperationDraft | null {
@@ -195,7 +208,7 @@ function parseCreateStandaloneEdge(text: string): SimpleOperationDraft | null {
 function parseRenameNode(text: string): SimpleOperationDraft | null {
   const match =
     text.match(/^把(.+?)(?:改名为|重命名为)(.+)$/) ??
-    text.match(/^把(.+?)上的文字(?:改成|改为)(.+)$/);
+    text.match(/^把(.+?)(?:中的|里的|上的)(?:.+?)?文字(?:改成|改为|设为)(.+)$/);
   return match
     ? {
         intent: 'update_node_text',
@@ -203,6 +216,16 @@ function parseRenameNode(text: string): SimpleOperationDraft | null {
         newLabel: cleanNodeText(match[2]),
       }
     : null;
+}
+
+function parsePlacement(
+  text: string,
+): Extract<SimpleOperationDraft, { intent: 'move_node' }>['placement'] {
+  if (text.includes('左')) return 'left';
+  if (text.includes('右')) return 'right';
+  if (/上|顶/.test(text)) return 'top';
+  if (/下|底/.test(text)) return 'bottom';
+  return 'center';
 }
 
 function parseUpdateNodeStyle(text: string): SimpleOperationDraft | null {

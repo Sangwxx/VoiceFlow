@@ -12,10 +12,23 @@ describe('parseSimpleCommand', () => {
     ['连接登录页到验证码校验', 'create_edge'],
     ['生成一条线', 'create_edge'],
     ['把5号圆形上的文字改成学校', 'update_node_text'],
+    ['把1号的开始框中的开始文字改成开始训练', 'update_node_text'],
+    ['把正方形移动到最下方', 'move_node'],
     ['删除登录页到验证码校验的连线', 'delete_edge'],
     ['把失败分支改成红色虚线', 'update_edge_style'],
   ])('parses "%s" as %s', (text, intent) => {
     expect(parseSimpleCommand(text)).toMatchObject({ status: 'ready', intent });
+  });
+
+  it('extracts move placement and complex numbered rename targets', () => {
+    expect(parseSimpleCommand('把正方形移动到最下方')).toMatchObject({
+      status: 'ready',
+      draft: { targetText: '正方形', placement: 'bottom' },
+    });
+    expect(parseSimpleCommand('把1号的开始框中的开始文字改成开始训练')).toMatchObject({
+      status: 'ready',
+      draft: { targetText: '1号的开始框', newLabel: '开始训练' },
+    });
   });
 
   it('extracts node type, edge label and style fields', () => {

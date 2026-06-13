@@ -48,4 +48,16 @@ describe('matchGenericDrawingActions', () => {
       },
     });
   });
+
+  it('extracts explicit relative positions without treating placement clauses as new shapes', () => {
+    const actions = matchGenericDrawingActions(
+      '生成一个三角形连接圆形，三角形在左边，圆形在右边',
+    );
+
+    expect(actions).toHaveLength(2);
+    expect(actions).toEqual([
+      expect.objectContaining({ label: '三角形', placement: 'left' }),
+      expect.objectContaining({ label: '圆形', placement: 'right' }),
+    ]);
+  });
 });

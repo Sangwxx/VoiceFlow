@@ -91,7 +91,17 @@ export function createSimpleCommandExecutor(speechFeedback: SpeechFeedbackServic
             ),
           )
         : [];
-    const operations = [...nodeOperations, ...edgeOperations];
+    const moveOperations = createDrafts.flatMap((draft, index) =>
+      draft.placement
+        ? [
+            operation('move_node', `将图形“${createdNodes[index].label}”放到指定位置`, {
+              nodeId: createdNodes[index].id,
+              position: genericPlacementPosition(draft.placement, index),
+            }),
+          ]
+        : [],
+    );
+    const operations = [...nodeOperations, ...edgeOperations, ...moveOperations];
     const startsNewCanvas = /^(?:画出?|绘制出?|生成|创建)/.test(
       normalizeText(originalCommand),
     );
@@ -275,6 +285,25 @@ export function createSimpleCommandExecutor(speechFeedback: SpeechFeedbackServic
               patch: { size: { width, height } },
             }),
             `已调整${target.label}尺寸`,
+            nodeTarget(target),
+            draft.intent,
+          );
+        }
+        case 'move_node': {
+          const target = await requireNode(
+            diagram,
+            draft,
+            'targetNodeId',
+            draft.targetText,
+            originalCommand,
+          );
+          if (!target) return finish(clarificationResult());
+          return apply(
+            operation('move_node', `将节点“${target.label}”移动到指定位置`, {
+              nodeId: target.id,
+              position: relativePlacementPosition(diagram, target, draft.placement),
+            }),
+            `已将${target.label}移动到${placementLabel(draft.placement)}`,
             nodeTarget(target),
             draft.intent,
           );
@@ -605,4 +634,71 @@ function nodeTarget(node: DiagramNode): ResolvedTarget {
 
 function edgeTarget(diagram: Diagram, edge: DiagramEdge): ResolvedTarget {
   return { kind: 'edge', id: edge.id, label: describeEdge(diagram, edge) };
+}
+
+function genericPlacementPosition(
+  placement: Extract<SimpleOperationDraft, { intent: 'create_node' }>['placement'] & {},
+  index: number,
+): { x: number; y: number } {
+  const offset = index * 24;
+  switch (placement) {
+    case 'left':
+      return { x: 120, y: 280 + offset };
+    case 'right':
+      return { x: 620, y: 280 + offset };
+    case 'top':
+      return { x: 370 + offset, y: 80 };
+    case 'bottom':
+      return { x: 370 + offset, y: 560 };
+    case 'center':
+      return { x: 370 + offset, y: 280 };
+  }
+}
+
+function relativePlacementPosition(
+  diagram: Diagram,
+  target: DiagramNode,
+  placement: Extract<SimpleOperationDraft, { intent: 'move_node' }>['placement'],
+): { x: number; y: number } {
+  const positioned = diagram.nodes.filter(
+    (node): node is DiagramNode & { position: { x: number; y: number } } =>
+      node.id !== target.id && node.position !== undefined,
+  );
+  if (!positioned.length) return genericPlacementPosition(placement, 0);
+  const minX = Math.min(...positioned.map((node) => node.position.x));
+  const maxX = Math.max(
+    ...positioned.map((node) => node.position.x + getNodeSize(node).width),
+  );
+  const minY = Math.min(...positioned.map((node) => node.position.y));
+  const maxY = Math.max(
+    ...positioned.map((node) => node.position.y + getNodeSize(node).height),
+  );
+  const size = getNodeSize(target);
+  const centerX = (minX + maxX - size.width) / 2;
+  const centerY = (minY + maxY - size.height) / 2;
+  const gap = 120;
+  switch (placement) {
+    case 'left':
+      return { x: minX - size.width - gap, y: centerY };
+    case 'right':
+      return { x: maxX + gap, y: centerY };
+    case 'top':
+      return { x: centerX, y: minY - size.height - gap };
+    case 'bottom':
+      return { x: centerX, y: maxY + gap };
+    case 'center':
+      return { x: centerX, y: centerY };
+  }
+}
+
+function placementLabel(
+  placement: Extract<SimpleOperationDraft, { intent: 'move_node' }>['placement'],
+): string {
+  return {
+    left: '最左侧',
+    right: '最右侧',
+    top: '最上方',
+    bottom: '最下方',
+    center: '中央',
+  }[placement];
 }

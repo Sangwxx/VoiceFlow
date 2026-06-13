@@ -56,9 +56,9 @@ function verifyExpectedChange(
       const newNode = findNode(after, operation.nodeId);
       return Boolean(
         oldNode &&
-          newNode &&
-          (oldNode.position?.x !== newNode.position?.x ||
-            oldNode.position?.y !== newNode.position?.y),
+        newNode &&
+        (oldNode.position?.x !== newNode.position?.x ||
+          oldNode.position?.y !== newNode.position?.y),
       );
     }
     case 'create_edge':

@@ -27,6 +27,7 @@ export type SimpleOperationDraft =
       nodeType: NodeType;
       size?: Size;
       style?: NodeStyle;
+      placement?: 'left' | 'right' | 'top' | 'bottom' | 'center';
     }
   | {
       intent: 'delete_node';

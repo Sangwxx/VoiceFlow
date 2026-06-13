@@ -137,6 +137,20 @@ describe('simpleCommandExecutor', () => {
     expect(useDiagramStore.getState().diagram.edges).toHaveLength(1);
   });
 
+  it('preserves explicit left and right positions in a connected shape command', async () => {
+    const executor = createSimpleCommandExecutor(speechFeedback);
+
+    await executor.execute('生成一个三角形连接圆形，三角形在左边，圆形在右边');
+
+    const diagram = useDiagramStore.getState().diagram;
+    const triangle = diagram.nodes.find((node) => node.label === '三角形');
+    const circle = diagram.nodes.find((node) => node.label === '圆形');
+    expect(diagram.nodes).toHaveLength(2);
+    expect(diagram.edges).toHaveLength(1);
+    expect(triangle?.position?.x).toBeLessThan(circle?.position?.x ?? 0);
+    expect(diagram.layout.autoLayout).toBe(false);
+  });
+
   it('renames a numbered shape by its visible object number', async () => {
     const executor = createSimpleCommandExecutor(speechFeedback);
     useDiagramStore.getState().reset(createBlankDiagram());
@@ -147,6 +161,32 @@ describe('simpleCommandExecutor', () => {
       intent: 'update_node_text',
     });
     expect(useDiagramStore.getState().diagram.nodes[4]?.label).toBe('学校');
+  });
+
+  it('moves a node locally and supports a descriptive numbered rename command', async () => {
+    const executor = createSimpleCommandExecutor(speechFeedback);
+
+    await expect(executor.execute('把登录页移动到最下方')).resolves.toMatchObject({
+      status: 'success',
+      intent: 'move_node',
+    });
+    const diagramAfterMove = useDiagramStore.getState().diagram;
+    const moved = diagramAfterMove.nodes.find((node) => node.id === 'login-page');
+    const otherMaxY = Math.max(
+      ...diagramAfterMove.nodes
+        .filter((node) => node.id !== 'login-page')
+        .map((node) => node.position?.y ?? 0),
+    );
+    expect(moved?.position?.y).toBeGreaterThan(otherMaxY);
+    expect(diagramAfterMove.layout.autoLayout).toBe(false);
+
+    await expect(
+      executor.execute('把1号的开始框中的开始文字改成开始训练'),
+    ).resolves.toMatchObject({
+      status: 'success',
+      intent: 'update_node_text',
+    });
+    expect(useDiagramStore.getState().diagram.nodes[0]?.label).toBe('开始训练');
   });
 
   it('duplicates and resizes a referenced object locally', async () => {

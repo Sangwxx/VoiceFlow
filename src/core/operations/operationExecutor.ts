@@ -79,6 +79,7 @@ function applyOperation(diagram: Diagram, operation: DiagramOperation): Diagram 
           ? { ...node, position: { ...operation.position } }
           : node,
       );
+      diagram.edges = diagram.edges.map((edge) => ({ ...edge, routing: undefined }));
       diagram.layout.autoLayout = false;
       return diagram;
     case 'create_edge':

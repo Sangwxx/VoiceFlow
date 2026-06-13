@@ -214,6 +214,13 @@ function normalizeOperations(value: unknown): DiagramOperation[] {
           nodeId: requiredString(operation.nodeId, 'nodeId'),
           patch: normalizeNodePatch(operation.patch),
         };
+      case 'move_node':
+        return {
+          ...base,
+          type,
+          nodeId: requiredString(operation.nodeId, 'nodeId'),
+          position: normalizePosition(operation.position),
+        };
       case 'create_edge':
         return { ...base, type, edge: normalizeOperationEdge(operation.edge, index) };
       case 'delete_edge':
@@ -274,6 +281,14 @@ function normalizeNodePatch(value: unknown): Partial<DiagramNode> {
       : {}),
     ...(style ? { style } : {}),
   };
+}
+
+function normalizePosition(value: unknown): { x: number; y: number } {
+  const position = record(value);
+  if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) {
+    throw new Error('AI Operation 的 position 必须包含有效的 x 和 y。');
+  }
+  return { x: Number(position.x), y: Number(position.y) };
 }
 
 function normalizeEdgePatch(value: unknown): Partial<DiagramEdge> {
