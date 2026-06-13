@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo } from 'react';
 
 import { CanvasErrorBoundary } from '../components/common/CanvasErrorBoundary';
+import { VisualClarificationCard } from '../components/common/VisualClarificationCard';
 import { registerCanvasViewportApi } from '../services/canvasViewportService';
 import { BrowserSpeechFeedbackService } from '../services/speechFeedbackService';
 import { useAgentStore } from '../stores/agentStore';
@@ -323,42 +324,36 @@ export function App() {
           </section>
 
           {(agent.status === 'clarifying' || pendingClarification) && (
-            <section className={`${styles.panelCard} ${styles.clarificationCard}`}>
-              <div className={styles.sectionHeading}>
-                <span>需要语音澄清</span>
-                <span>等待回答</span>
-              </div>
-              <p className={styles.clarificationQuestion}>
-                {agent.status === 'clarifying'
+            <VisualClarificationCard
+              title="视觉化消歧"
+              status="等待语音回答"
+              originalCommand={
+                pendingClarification?.originalCommand ?? agent.originalCommand
+              }
+              reason={
+                agent.status === 'clarifying'
                   ? agent.summary
-                  : pendingClarification?.question}
-              </p>
-              <p className={styles.resultMessage}>
-                消歧依据：当前指令匹配到多个候选目标，为避免误操作，系统暂停执行并请求语音确认。
-              </p>
-              {pendingClarification && (
-                <ol className={styles.candidateList}>
-                  {pendingClarification.candidates.map((candidate) => (
-                    <li key={candidate.id}>{candidate.label}</li>
-                  ))}
-                </ol>
-              )}
-            </section>
+                  : '当前指令匹配到多个候选目标，为避免误操作，系统暂停执行并请求确认。'
+              }
+              candidates={pendingClarification?.candidates ?? []}
+            />
           )}
 
           {pendingCorrection && (
-            <section className={`${styles.panelCard} ${styles.clarificationCard}`}>
-              <div className={styles.sectionHeading}>
-                <span>语义纠错待确认</span>
-                <span>置信度 {Math.round(pendingCorrection.confidence * 100)}%</span>
-              </div>
-              <p className={styles.clarificationQuestion}>
-                “{pendingCorrection.originalText}” → “{pendingCorrection.correctedText}”
-              </p>
-              <p className={styles.resultMessage}>
-                {pendingCorrection.reason}。请说确认或取消。
-              </p>
-            </section>
+            <VisualClarificationCard
+              title="语义纠错待确认"
+              status={`置信度 ${Math.round(pendingCorrection.confidence * 100)}%`}
+              originalCommand={pendingCorrection.originalText}
+              reason={pendingCorrection.reason}
+              candidates={[
+                {
+                  id: 'pending-correction',
+                  label: pendingCorrection.correctedText,
+                  kind: '纠错建议',
+                  detail: '建议命令',
+                },
+              ]}
+            />
           )}
 
           {workflowClarification && (
