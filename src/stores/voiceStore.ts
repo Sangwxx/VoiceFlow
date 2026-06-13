@@ -16,6 +16,7 @@ export type CorrectionFeedback = {
   correctedText: string;
   confidence: number;
   reason: string;
+  changed?: boolean;
 };
 
 export type VoiceStoreState = {
@@ -24,7 +25,6 @@ export type VoiceStoreState = {
   finalTranscript: string;
   correctedTranscript: string;
   correctionFeedback: CorrectionFeedback | null;
-  pendingCorrection: CorrectionFeedback | null;
   error: string | null;
   commandPaused: boolean;
   taskQueue: VoiceTask[];
@@ -33,7 +33,6 @@ export type VoiceStoreState = {
   setFinalTranscript: (text: string) => void;
   setCorrectedTranscript: (text: string) => void;
   setCorrectionFeedback: (feedback: CorrectionFeedback | null) => void;
-  setPendingCorrection: (correction: CorrectionFeedback | null) => void;
   setError: (error: string | null) => void;
   setCommandPaused: (paused: boolean) => void;
   setTaskQueue: (tasks: VoiceTask[]) => void;
@@ -47,7 +46,6 @@ export const useVoiceStore = create<VoiceStoreState>((set) => ({
   finalTranscript: '',
   correctedTranscript: '',
   correctionFeedback: null,
-  pendingCorrection: null,
   error: null,
   commandPaused: false,
   taskQueue: [],
@@ -62,7 +60,6 @@ export const useVoiceStore = create<VoiceStoreState>((set) => ({
       correctionFeedback,
       correctedTranscript: correctionFeedback?.correctedText ?? '',
     }),
-  setPendingCorrection: (pendingCorrection) => set({ pendingCorrection }),
   setError: (error) => set({ error, status: error ? 'error' : 'idle' }),
   setCommandPaused: (commandPaused) =>
     set({ commandPaused, status: commandPaused ? 'paused' : 'listening' }),
@@ -75,7 +72,6 @@ export const useVoiceStore = create<VoiceStoreState>((set) => ({
       finalTranscript: '',
       correctedTranscript: '',
       correctionFeedback: null,
-      pendingCorrection: null,
       error: null,
       commandPaused: false,
       taskQueue: [],

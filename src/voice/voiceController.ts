@@ -18,6 +18,7 @@ import { useWorkflowStore } from '../stores/workflowStore';
 import { useProposalStore } from '../stores/proposalStore';
 import { useDiagramStore } from '../stores/diagramStore';
 import { VoiceTaskSegmenter, type VoiceTask } from './voiceTaskSegmenter';
+import { calibrateAsrTranscript } from './localAsrCalibrator';
 
 export type VoiceControllerDependencies = {
   provider: VoiceProvider;
@@ -73,7 +74,6 @@ export function createVoiceController({
     const workflow = useWorkflowStore.getState();
     return Boolean(
       useProposalStore.getState().proposal ||
-      useVoiceStore.getState().pendingCorrection ||
       useCommandStore.getState().pendingClarification ||
       useAgentStore.getState().status === 'clarifying' ||
       workflow.pendingVersionClarification ||
@@ -146,12 +146,25 @@ export function createVoiceController({
         },
         onResult: ({ text, isFinal }) => {
           if (!shouldListen) return;
+          const calibration = calibrateAsrTranscript(text, {
+            diagram: useDiagramStore.getState().diagram,
+            recentCommands: useCommandStore
+              .getState()
+              .executionLog.slice(0, 8)
+              .map((entry) => entry.rawText),
+          });
           if (isFinal) {
             useVoiceStore.getState().setFinalTranscript(text);
-            appendTasks(segmenter.ingestFinal(text));
+            if (calibration.changed) {
+              useVoiceStore.getState().setCorrectionFeedback(calibration);
+            }
+            appendTasks(segmenter.ingestFinal(calibration.correctedText));
           } else {
             useVoiceStore.getState().setInterimTranscript(text);
-            appendTasks(segmenter.ingestInterim(text));
+            if (calibration.changed) {
+              useVoiceStore.getState().setCorrectionFeedback(calibration);
+            }
+            appendTasks(segmenter.ingestInterim(calibration.correctedText));
           }
         },
         onError: (error) => useVoiceStore.getState().setError(error.message),
@@ -181,32 +194,22 @@ export function createVoiceController({
     },
     async handleFinalTranscript(text: string) {
       const startedAt = performance.now();
-      let executionText = text;
-      let route = routeCommand(text);
-      const pendingCorrection = useVoiceStore.getState().pendingCorrection;
-      if (pendingCorrection) {
-        if (route.fastCommand === 'confirm') {
-          executionText = pendingCorrection.correctedText;
-          route = {
-            ...routeCommand(executionText),
-            rawText: text,
-            reason: `用户确认语义纠错：${pendingCorrection.reason}`,
-          };
-          useVoiceStore.getState().setCorrectionFeedback(pendingCorrection);
-          useVoiceStore.getState().setPendingCorrection(null);
-        } else if (route.fastCommand === 'cancel') {
-          useVoiceStore.getState().setPendingCorrection(null);
-        } else {
-          const message = '当前有待确认的语义纠错，请说确认或取消';
-          useCommandStore.getState().setLastMessage(message);
-          void speechFeedback.speak(message);
-          useCommandStore
-            .getState()
-            .addExecutionLog(
-              createExecutionLog(route, { status: 'ignored', message }, startedAt),
-            );
-          return;
-        }
+      const calibration = calibrateAsrTranscript(text, {
+        diagram: useDiagramStore.getState().diagram,
+        recentCommands: useCommandStore
+          .getState()
+          .executionLog.slice(0, 8)
+          .map((entry) => entry.rawText),
+      });
+      const executionText = calibration.correctedText;
+      let route = routeCommand(executionText);
+      if (calibration.changed) {
+        useVoiceStore.getState().setCorrectionFeedback(calibration);
+        route = {
+          ...route,
+          rawText: text,
+          reason: `本地语音校准：${calibration.reason}`,
+        };
       }
       const pendingSimple = useCommandStore.getState().pendingClarification;
       const agentClarifying = useAgentStore.getState().status === 'clarifying';
@@ -217,75 +220,6 @@ export function createVoiceController({
       const hasPendingClarification = Boolean(
         pendingSimple || agentClarifying || workflowClarifying,
       );
-      if (
-        route.route === 'unknown' &&
-        !hasPendingClarification &&
-        aiProvider.interpretCommand
-      ) {
-        try {
-          const diagram = useDiagramStore.getState().diagram;
-          const interpretation = await aiProvider.interpretCommand({
-            transcript: text,
-            recentCommands: useCommandStore
-              .getState()
-              .executionLog.slice(0, 5)
-              .map((log) => log.rawText),
-            diagramTitle: diagram.title,
-            nodeLabels: diagram.nodes.map((node) => node.label),
-          });
-          const correctedRoute = routeCommand(interpretation.correctedText);
-          if (correctedRoute.route !== 'unknown') {
-            const correction = {
-              originalText: text,
-              correctedText: interpretation.correctedText,
-              confidence: interpretation.confidence,
-              reason: interpretation.reason,
-            };
-            useVoiceStore.getState().setCorrectionFeedback(correction);
-            if (interpretation.confidence >= 0.75) {
-              executionText = interpretation.correctedText;
-              route = {
-                ...correctedRoute,
-                rawText: text,
-                confidence: Math.min(
-                  correctedRoute.confidence,
-                  interpretation.confidence,
-                ),
-                reason: `高置信度语义纠错：${interpretation.reason}`,
-              };
-            } else {
-              const needsConfirmation = interpretation.confidence >= 0.5;
-              const message = needsConfirmation
-                ? `我理解为“${interpretation.correctedText}”，请说确认或取消`
-                : '语音理解置信度较低，请重新描述命令';
-              if (needsConfirmation) {
-                useVoiceStore.getState().setPendingCorrection(correction);
-              }
-              useCommandStore.getState().setRouteResult({
-                ...route,
-                confidence: interpretation.confidence,
-                reason: needsConfirmation
-                  ? `中置信度语义纠错，等待确认：${interpretation.reason}`
-                  : `低置信度语义纠错，请求重述：${interpretation.reason}`,
-              });
-              useCommandStore.getState().setLastMessage(message);
-              void speechFeedback.speak(message);
-              useCommandStore
-                .getState()
-                .addExecutionLog(
-                  createExecutionLog(
-                    route,
-                    { status: 'clarification', message },
-                    startedAt,
-                  ),
-                );
-              return;
-            }
-          }
-        } catch {
-          // Semantic correction is a best-effort fallback; normal routing feedback remains.
-        }
-      }
       if (
         route.route === 'unknown' &&
         !hasPendingClarification &&
@@ -350,8 +284,8 @@ export function createVoiceController({
       } else {
         const message =
           aiProvider.mode === 'mock'
-            ? '没有识别到可执行的命令。当前使用 Mock AI，配置真实大模型后可进行上下文语义纠错'
-            : 'AI 结合上下文后仍无法确定命令，请换一种说法';
+            ? '本地语音校准后仍没有识别到可执行命令，请换一种说法'
+            : '本地语音校准后仍无法确定命令，请换一种说法';
         useCommandStore.getState().setLastMessage(message);
         void speechFeedback.speak(message);
         result = { status: 'ignored', message };

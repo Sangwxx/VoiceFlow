@@ -107,7 +107,6 @@ export function createFastCommandExecutor({
           useWorkflowStore.getState().clear();
           useCommandStore.getState().clearPending();
           useVoiceStore.getState().clearInterimTranscript();
-          useVoiceStore.getState().setPendingCorrection(null);
           message = '已取消当前待处理命令';
           break;
         case 'confirm':

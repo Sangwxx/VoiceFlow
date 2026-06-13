@@ -46,8 +46,10 @@ Web Speech API
 ## Safety Boundaries
 
 - Fast Path commands bypass AI and expose measured execution latency in the UI.
-- Semantic correction uses confidence tiers: high confidence executes, medium confidence
-  waits for voice confirmation, and low confidence asks the user to restate.
+- ASR calibration is synchronous and local. It combines domain terms, error mappings,
+  phonetic similarity, edit distance, command aliases, current Diagram labels and recent
+  commands. Candidate competition, score margins and overlap resolution prevent aggressive
+  replacements as the lexicon grows.
 - Ambiguous targets are displayed as visual candidates and remain voice-selectable only.
 - Diagram and Operation runtime validators reject invalid graph structures.
 - Contextual Agent requests receive the current Diagram and recent command context, but may only

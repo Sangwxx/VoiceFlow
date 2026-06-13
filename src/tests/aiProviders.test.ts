@@ -35,20 +35,6 @@ describe('AI providers', () => {
     });
   });
 
-  it('corrects common speech recognition errors in Mock mode', async () => {
-    const provider = new MockAiProvider();
-    await expect(
-      provider.interpretCommand({
-        transcript: '声成一张强化学西的流成图',
-        recentCommands: [],
-        diagramTitle: '当前图',
-        nodeLabels: [],
-      }),
-    ).resolves.toMatchObject({
-      correctedText: '生成一张强化学习的流程图',
-    });
-  });
-
   it('allows recording mode to force the deterministic Mock provider', () => {
     expect(
       createConfiguredAiProvider({

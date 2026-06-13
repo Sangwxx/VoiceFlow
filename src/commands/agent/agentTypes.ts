@@ -25,19 +25,6 @@ export type AgentRequest = {
   recentCommands?: string[];
 };
 
-export type SemanticInterpretationRequest = {
-  transcript: string;
-  recentCommands: string[];
-  diagramTitle: string;
-  nodeLabels: string[];
-};
-
-export type SemanticInterpretationResult = {
-  correctedText: string;
-  confidence: number;
-  reason: string;
-};
-
 export type AgentPlanResult =
   | {
       kind: 'diagram';
@@ -62,8 +49,4 @@ export interface AiProvider {
   readonly mode: 'mock' | 'real';
   readonly model: string;
   complete(request: AgentRequest, options?: { signal?: AbortSignal }): Promise<unknown>;
-  interpretCommand?(
-    request: SemanticInterpretationRequest,
-    options?: { signal?: AbortSignal },
-  ): Promise<SemanticInterpretationResult>;
 }
