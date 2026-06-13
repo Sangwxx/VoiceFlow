@@ -13,6 +13,7 @@ import type { WorkflowIntent } from './workflowTypes';
 import { useCanvasViewStore } from '../../stores/canvasViewStore';
 import { resolveNode } from '../simple/entityResolver';
 import { getCanvasViewportApi } from '../../services/canvasViewportService';
+import { saveCurrentDiagramVersion } from '../../services/diagramVersionService';
 
 function extractVersionName(text: string): string {
   return (
@@ -86,6 +87,7 @@ export function createWorkflowCommandExecutor(speechFeedback: SpeechFeedbackServ
           const diff = useVersionStore.getState().compare(version.diagram, diagram);
           message = `版本对比完成：新增节点 ${diff.addedNodes}，删除节点 ${diff.removedNodes}，修改节点 ${diff.changedNodes}`;
         } else {
+          saveCurrentDiagramVersion('auto_before_version_restore', true);
           useDiagramStore
             .getState()
             .replaceDiagram(
@@ -116,6 +118,9 @@ export function createWorkflowCommandExecutor(speechFeedback: SpeechFeedbackServ
                 : loginFlowDiagram;
           candidate = defaultLayoutEngine.layout(candidate);
           title = `载入演示场景 ${candidate.title}`;
+        }
+        if (intent.startsWith('load_')) {
+          saveCurrentDiagramVersion('auto_before_workflow_replace', true);
         }
         useDiagramStore.getState().replaceDiagram(candidate, title);
         message = `已应用 ${candidate.title}`;

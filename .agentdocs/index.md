@@ -18,6 +18,7 @@
 
 ## 已完成任务文档
 
+- `workflow/done/260614-editor-lifecycle-and-viewport.md`：基础绘图指令、未保存画布保护与大型图表视口适配。
 - `workflow/done/260614-llm-diagram-generation.md`：完整图表由 LLM 主导生成，基础图形保持本地绘制，并增加文字测试入口。
 - `workflow/done/260613-remove-confirmation-questions.md`：删除系统确认与反问流程，改为确定性选择和校验后直接执行。
 

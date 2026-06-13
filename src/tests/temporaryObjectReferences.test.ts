@@ -36,6 +36,10 @@ describe('temporary object references', () => {
       kind: 'node',
       id: 'start',
     });
+    expect(resolveTemporaryObjectReference(loginFlowDiagram, '5号圆形')).toMatchObject({
+      kind: 'node',
+      id: loginFlowDiagram.nodes[4].id,
+    });
     expect(
       resolveTemporaryObjectReference(
         loginFlowDiagram,

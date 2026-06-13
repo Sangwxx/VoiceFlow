@@ -62,6 +62,7 @@ export type SimpleOperationDraft =
       sourceText: string;
       targetText: string;
       label?: string;
+      useRecentNodes?: boolean;
       resolved?: Record<string, string>;
     }
   | {

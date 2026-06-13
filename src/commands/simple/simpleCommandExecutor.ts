@@ -7,8 +7,11 @@ import type {
   NodeStyle,
 } from '../../core/diagram/diagramTypes';
 import type { DiagramOperation } from '../../core/operations/operationTypes';
+import { executeOperations } from '../../core/operations/operationExecutor';
+import { createBlankDiagram } from '../../core/diagram/blankDiagram';
 import { getNodeSize } from '../../core/diagram/diagramUtils';
 import type { SpeechFeedbackService } from '../../services/speechFeedbackService';
+import { saveCurrentDiagramVersion } from '../../services/diagramVersionService';
 import { useCommandStore } from '../../stores/commandStore';
 import { useDiagramStore } from '../../stores/diagramStore';
 import { createId } from '../../utils/id';
@@ -47,7 +50,7 @@ const EDGE_COLORS: Record<string, string> = {
 export function createSimpleCommandExecutor(speechFeedback: SpeechFeedbackService) {
   async function execute(text: string): Promise<SimpleExecutionResult> {
     const genericDrafts = matchGenericDrawingActions(text);
-    if (genericDrafts.length > 1) return executeGenericBatch(genericDrafts);
+    if (genericDrafts.length) return executeGenericBatch(genericDrafts, text);
     const parsed = parseSimpleCommand(text);
     if (parsed.status !== 'ready')
       return finish({ status: 'error', message: parsed.message });
@@ -56,12 +59,13 @@ export function createSimpleCommandExecutor(speechFeedback: SpeechFeedbackServic
 
   async function executeGenericBatch(
     drafts: SimpleOperationDraft[],
+    originalCommand: string,
   ): Promise<SimpleExecutionResult> {
     const createDrafts = drafts.filter(
       (draft): draft is Extract<SimpleOperationDraft, { intent: 'create_node' }> =>
         draft.intent === 'create_node',
     );
-    const operations = createDrafts.map((draft) =>
+    const nodeOperations = createDrafts.map((draft) =>
       createNodeOperation(
         draft.label,
         draft.nodeType,
@@ -70,9 +74,32 @@ export function createSimpleCommandExecutor(speechFeedback: SpeechFeedbackServic
         draft.style,
       ),
     );
-    const verification = useDiagramStore
-      .getState()
-      .applyOperations(operations, `批量创建 ${operations.length} 个图形`);
+    const createdNodes = nodeOperations.map((operation) => operation.node);
+    const edgeOperations =
+      /连接|连线|箭头/.test(originalCommand) && createdNodes.length > 1
+        ? createdNodes.slice(1).map((node, index) =>
+            operation(
+              'create_edge',
+              `连接图形“${createdNodes[index].label}”到“${node.label}”`,
+              {
+                edge: {
+                  id: createId('edge'),
+                  from: createdNodes[index].id,
+                  to: node.id,
+                },
+              },
+            ),
+          )
+        : [];
+    const operations = [...nodeOperations, ...edgeOperations];
+    const startsNewCanvas = /^(?:画出?|绘制出?|生成|创建)/.test(
+      normalizeText(originalCommand),
+    );
+    const verification = startsNewCanvas
+      ? replaceWithGenericDrawing(operations, createdNodes.length)
+      : useDiagramStore
+          .getState()
+          .applyOperations(operations, `批量创建 ${createdNodes.length} 个图形`);
     if (!verification.verified) {
       return finish({
         status: 'ignored',
@@ -80,9 +107,8 @@ export function createSimpleCommandExecutor(speechFeedback: SpeechFeedbackServic
         message: verification.message,
       });
     }
-    const lastOperation = operations.at(-1);
-    const lastNode =
-      lastOperation?.type === 'create_node' ? lastOperation.node : undefined;
+    const lastOperation = nodeOperations.at(-1);
+    const lastNode = lastOperation?.node;
     if (lastNode && lastOperation) {
       useCommandStore.getState().setLastTarget(nodeTarget(lastNode));
       useCommandStore.getState().setLastOperation(lastOperation);
@@ -90,10 +116,20 @@ export function createSimpleCommandExecutor(speechFeedback: SpeechFeedbackServic
     return finish({
       status: 'success',
       intent: 'create_node',
-      message: `已创建 ${operations.length} 个图形`,
+      message: `已创建 ${createdNodes.length} 个图形${edgeOperations.length ? `并连接 ${edgeOperations.length} 条线` : ''}`,
       target: lastNode ? nodeTarget(lastNode) : undefined,
       operation: lastOperation,
     });
+  }
+
+  function replaceWithGenericDrawing(operations: DiagramOperation[], nodeCount: number) {
+    saveCurrentDiagramVersion('auto_before_shape_drawing', true);
+    const blank = createBlankDiagram();
+    blank.title = nodeCount === 1 ? '单个图形' : '图形组合';
+    const next = executeOperations(blank, operations);
+    return useDiagramStore
+      .getState()
+      .replaceDiagram(next, `新建包含 ${nodeCount} 个图形的画布`);
   }
 
   async function answerClarification(text: string): Promise<SimpleExecutionResult> {
@@ -244,21 +280,33 @@ export function createSimpleCommandExecutor(speechFeedback: SpeechFeedbackServic
           );
         }
         case 'create_edge': {
-          const source = await requireNode(
-            diagram,
-            draft,
-            'sourceNodeId',
-            draft.sourceText,
-            originalCommand,
-          );
+          const recentNodes = draft.useRecentNodes ? diagram.nodes.slice(-2) : [];
+          const source =
+            recentNodes[0] ??
+            (await requireNode(
+              diagram,
+              draft,
+              'sourceNodeId',
+              draft.sourceText,
+              originalCommand,
+            ));
           if (!source) return finish(clarificationResult());
-          const target = await requireNode(
-            diagram,
-            draft,
-            'targetNodeId',
-            draft.targetText,
-            originalCommand,
-          );
+          const target =
+            recentNodes[1] ??
+            (await requireNode(
+              diagram,
+              draft,
+              'targetNodeId',
+              draft.targetText,
+              originalCommand,
+            ));
+          if (draft.useRecentNodes && recentNodes.length < 2) {
+            return finish({
+              status: 'error',
+              intent: draft.intent,
+              message: '至少需要两个节点才能生成连线',
+            });
+          }
           if (!target) return finish(clarificationResult());
           const edge: DiagramEdge = {
             id: createId('edge'),

@@ -14,6 +14,7 @@ import { createVoiceController } from '../voice/voiceController';
 import type { VoiceTask } from '../voice/voiceTaskSegmenter';
 import type { VoiceController } from '../voice/voiceTypes';
 import { WebSpeechProvider } from '../voice/webSpeechProvider';
+import { saveCurrentDiagramVersion } from '../services/diagramVersionService';
 import styles from './App.module.css';
 
 const FlowRenderer = lazy(() =>
@@ -203,12 +204,12 @@ export function App() {
           <div className={styles.sectionHeading}>
             <div>
               <span>版本管理</span>
-              <small>仅收录明确语音保存的版本</small>
+              <small>手动保存与替换前自动备份</small>
             </div>
             <strong>{versions.length}</strong>
           </div>
           <p className={styles.versionHint}>
-            说“保存当前版本叫初始流程”，需要时说“恢复初始流程”。
+            点击“保存当前图”或说“保存当前版本叫初始流程”，替换画布前会自动备份。
           </p>
           <ol className={styles.versionList}>
             {versions.length ? (
@@ -219,7 +220,7 @@ export function App() {
                 </li>
               ))
             ) : (
-              <li className={styles.emptyState}>请说“保存当前版本叫…”进行收录</li>
+              <li className={styles.emptyState}>点击“保存当前图”或使用语音保存版本</li>
             )}
           </ol>
         </section>
@@ -232,6 +233,13 @@ export function App() {
             <h2>{visibleDiagram.title}</h2>
           </div>
           <span className={styles.readOnlyBadge}>只读画布</span>
+          <button
+            className={styles.manualButton}
+            type="button"
+            onClick={() => saveCurrentDiagramVersion('manual_button')}
+          >
+            保存当前图
+          </button>
           <button
             className={styles.manualButton}
             type="button"

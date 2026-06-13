@@ -4,6 +4,8 @@ import { createSimpleCommandExecutor } from '../commands/simple/simpleCommandExe
 import type { SpeechFeedbackService } from '../services/speechFeedbackService';
 import { useCommandStore } from '../stores/commandStore';
 import { useDiagramStore } from '../stores/diagramStore';
+import { useVersionStore } from '../stores/versionStore';
+import { createBlankDiagram } from '../core/diagram/blankDiagram';
 
 const speechFeedback: SpeechFeedbackService = {
   isSupported: () => true,
@@ -14,6 +16,7 @@ describe('simpleCommandExecutor', () => {
   beforeEach(() => {
     useDiagramStore.getState().reset();
     useCommandStore.getState().reset();
+    useVersionStore.getState().clear();
     vi.clearAllMocks();
   });
 
@@ -92,16 +95,58 @@ describe('simpleCommandExecutor', () => {
 
   it('creates multiple generic shapes atomically from one command', async () => {
     const executor = createSimpleCommandExecutor(speechFeedback);
-    const before = useDiagramStore.getState().diagram.nodes.length;
 
     await expect(executor.execute('画一个正方形和三角形')).resolves.toMatchObject({
       status: 'success',
       intent: 'create_node',
     });
 
-    expect(useDiagramStore.getState().diagram.nodes).toHaveLength(before + 2);
+    expect(useDiagramStore.getState().diagram.nodes).toHaveLength(2);
     expect(useDiagramStore.getState().past).toHaveLength(1);
     expect(useDiagramStore.getState().history[0]?.description).toContain('2');
+    expect(useVersionStore.getState().versions[0]?.kind).toBe('auto');
+  });
+
+  it('adds shapes to the current canvas only for additive wording', async () => {
+    const executor = createSimpleCommandExecutor(speechFeedback);
+    const before = useDiagramStore.getState().diagram.nodes.length;
+
+    await executor.execute('添加一个三角形和圆形');
+
+    expect(useDiagramStore.getState().diagram.nodes).toHaveLength(before + 2);
+  });
+
+  it('creates a local line between the two most recent nodes', async () => {
+    const executor = createSimpleCommandExecutor(speechFeedback);
+    useDiagramStore.getState().reset(createBlankDiagram());
+    await executor.execute('添加一个三角形和圆形');
+
+    await expect(executor.execute('生成一条线')).resolves.toMatchObject({
+      status: 'success',
+      intent: 'create_edge',
+    });
+    expect(useDiagramStore.getState().diagram.edges).toHaveLength(1);
+  });
+
+  it('creates and connects multiple shapes in one local command', async () => {
+    const executor = createSimpleCommandExecutor(speechFeedback);
+
+    await executor.execute('画一个三角形连接圆形，连接线用箭头');
+
+    expect(useDiagramStore.getState().diagram.nodes).toHaveLength(2);
+    expect(useDiagramStore.getState().diagram.edges).toHaveLength(1);
+  });
+
+  it('renames a numbered shape by its visible object number', async () => {
+    const executor = createSimpleCommandExecutor(speechFeedback);
+    useDiagramStore.getState().reset(createBlankDiagram());
+    await executor.execute('添加5个圆形');
+
+    await expect(executor.execute('把5号圆形上的文字改成学校')).resolves.toMatchObject({
+      status: 'success',
+      intent: 'update_node_text',
+    });
+    expect(useDiagramStore.getState().diagram.nodes[4]?.label).toBe('学校');
   });
 
   it('duplicates and resizes a referenced object locally', async () => {

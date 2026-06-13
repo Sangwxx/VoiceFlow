@@ -42,6 +42,8 @@ type FlowRendererProps = {
   diagram: Diagram;
 };
 
+export const MIN_CANVAS_ZOOM = 0.05;
+
 const nodeTypes: NodeTypes = {
   start: StartNode,
   end: EndNode,
@@ -69,6 +71,14 @@ export const FlowRenderer = forwardRef<CanvasViewportApi, FlowRendererProps>(
       () => diagramToReactFlow(renderDiagram),
       [renderDiagram],
     );
+
+    useEffect(() => {
+      if (!instance || flowElements.nodes.length === 0) return;
+      const frame = window.requestAnimationFrame(() => {
+        void instance.fitView({ padding: 0.12, duration: 260, maxZoom: 1 });
+      });
+      return () => window.cancelAnimationFrame(frame);
+    }, [flowElements.nodes, instance]);
 
     useEffect(() => {
       let active = true;
@@ -126,7 +136,7 @@ export const FlowRenderer = forwardRef<CanvasViewportApi, FlowRendererProps>(
           onError={(errorType, message) =>
             logModuleError('CanvasRenderer', errorType, diagram.id, message)
           }
-          minZoom={0.2}
+          minZoom={MIN_CANVAS_ZOOM}
           maxZoom={2}
           fitView
           {...READ_ONLY_FLOW_PROPS}

@@ -17,7 +17,7 @@ export function buildAgentPrompt(request: AgentRequest): string {
     '节点类型可选：start,end,process,decision,database,service,user,external,group。',
     '支持的连线类型：solid,dashed,highlight,weak。',
     isModification
-      ? 'operations 只允许 apply_layout、create_node、delete_node、update_node、create_edge、delete_edge、update_edge、insert_node_after。目标必须使用当前图表中的真实 ID；新 ID 必须唯一。不得修改节点 ID、连线 ID 或连线端点。'
+      ? 'operations 数组中的每一项都必须包含合法的 Operation type。只允许 apply_layout、create_node、delete_node、update_node、create_edge、delete_edge、update_edge、insert_node_after。process、user、decision 等是 node.type，绝对不能作为 Operation type。目标必须使用当前图表中的真实 ID；新 ID 必须唯一。不得修改节点 ID、连线 ID 或连线端点。'
       : '',
     '必须围绕用户给出的具体主题生成内容。不要使用“核心概念、方法与工具、实践应用”等通用占位词，除非用户明确要求。',
     '用户未列出具体节点时，请基于主题知识主动补全合理结构；通常生成 5 到 14 个节点，复杂主题可以更多，但避免无意义堆砌。',

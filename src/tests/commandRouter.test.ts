@@ -83,6 +83,14 @@ describe('routeCommand', () => {
       route: 'simple',
       simpleIntent: 'create_node',
     });
+    expect(routeCommand('生成一条线')).toMatchObject({
+      route: 'simple',
+      simpleIntent: 'create_edge',
+    });
+    expect(routeCommand('把5号圆形上的文字改成学校')).toMatchObject({
+      route: 'simple',
+      simpleIntent: 'update_node_text',
+    });
     expect(routeCommand('复制物体1')).toMatchObject({
       route: 'simple',
       simpleIntent: 'duplicate_node',

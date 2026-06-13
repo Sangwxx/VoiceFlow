@@ -7,7 +7,7 @@ import { validateDiagram } from '../core/diagram/diagramValidators';
 export type DiagramVersion = {
   id: string;
   name: string;
-  kind: 'manual';
+  kind: 'manual' | 'auto';
   sourceAction: string;
   createdAt: string;
   diagram: Diagram;
@@ -40,7 +40,7 @@ function isDiagramVersion(item: unknown): item is DiagramVersion {
     version.id &&
     typeof version.name === 'string' &&
     version.name.trim() &&
-    version.kind === 'manual' &&
+    (version.kind === 'manual' || version.kind === 'auto') &&
     typeof version.sourceAction === 'string' &&
     typeof version.createdAt === 'string' &&
     version.diagram &&

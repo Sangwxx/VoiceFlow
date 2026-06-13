@@ -36,6 +36,7 @@ export function parseSimpleCommand(text: string): SimpleParseResult {
     parseInsertNode(normalized) ??
     parseUpdateEdgeStyle(normalized) ??
     parseDeleteEdge(normalized) ??
+    parseCreateStandaloneEdge(normalized) ??
     parseCreateEdge(normalized) ??
     parseRenameNode(normalized) ??
     parseUpdateNodeStyle(normalized) ??
@@ -179,8 +180,22 @@ function parseCreateEdge(text: string): SimpleOperationDraft | null {
   };
 }
 
+function parseCreateStandaloneEdge(text: string): SimpleOperationDraft | null {
+  if (!/^(?:生成|画|绘制|创建|添加|加)(?:一条|条)?(?:连线|线|箭头)$/.test(text)) {
+    return null;
+  }
+  return {
+    intent: 'create_edge',
+    sourceText: '',
+    targetText: '',
+    useRecentNodes: true,
+  };
+}
+
 function parseRenameNode(text: string): SimpleOperationDraft | null {
-  const match = text.match(/^把(.+?)(?:改名为|重命名为)(.+)$/);
+  const match =
+    text.match(/^把(.+?)(?:改名为|重命名为)(.+)$/) ??
+    text.match(/^把(.+?)上的文字(?:改成|改为)(.+)$/);
   return match
     ? {
         intent: 'update_node_text',

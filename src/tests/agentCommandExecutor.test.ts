@@ -5,6 +5,7 @@ import type { AiProvider } from '../commands/agent/agentTypes';
 import type { SpeechFeedbackService } from '../services/speechFeedbackService';
 import { useAgentStore } from '../stores/agentStore';
 import { useDiagramStore } from '../stores/diagramStore';
+import { useVersionStore } from '../stores/versionStore';
 
 const feedback: SpeechFeedbackService = {
   isSupported: () => true,
@@ -15,6 +16,7 @@ describe('agentCommandExecutor', () => {
   beforeEach(() => {
     useAgentStore.getState().clear();
     useDiagramStore.getState().reset();
+    useVersionStore.getState().clear();
   });
 
   it('applies generated diagrams directly and supports undo', async () => {
@@ -26,6 +28,7 @@ describe('agentCommandExecutor', () => {
     await executor.execute('画一个包含网关、服务和数据库的系统架构图', 'create_diagram');
 
     expect(useDiagramStore.getState().diagram.diagramType).toBe('architecture');
+    expect(useVersionStore.getState().versions[0]?.kind).toBe('auto');
     expect(useDiagramStore.getState().past).toHaveLength(1);
     expect(useDiagramStore.getState().undo()).toBe(true);
     expect(useDiagramStore.getState().diagram.id).toBe(original.id);

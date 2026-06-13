@@ -48,7 +48,9 @@ function extractObjectNumber(query: string): number | undefined {
   const normalized = query.replace(/\s+/g, '');
   const match =
     normalized.match(/(?:物体|对象|编号|物件|元素)([\d零〇一二两三四五六七八九十百]+)/) ??
-    normalized.match(/([\d零〇一二两三四五六七八九十百]+)号(?:物体|对象|物件|元素)/);
+    normalized.match(
+      /([\d零〇一二两三四五六七八九十百]+)号(?:物体|对象|物件|元素|节点|图形|正方形|方形|圆形|圆|矩形|长方形|菱形|椭圆|三角形|六边形|五角星|星形)/,
+    );
   if (!match) return undefined;
   const number = /^\d+$/.test(match[1]) ? Number(match[1]) : parseChineseNumber(match[1]);
   return Number.isSafeInteger(number) && number > 0 ? number : undefined;

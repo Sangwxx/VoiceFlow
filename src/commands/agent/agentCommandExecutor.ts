@@ -2,6 +2,7 @@ import type { SpeechFeedbackService } from '../../services/speechFeedbackService
 import { useAgentStore } from '../../stores/agentStore';
 import { useCommandStore } from '../../stores/commandStore';
 import { useDiagramStore } from '../../stores/diagramStore';
+import { saveCurrentDiagramVersion } from '../../services/diagramVersionService';
 import type { FastCommandExecutionResult } from '../fast/fastCommandExecutor';
 import { normalizeAgentResult } from './agentNormalizer';
 import type { AgentIntent, AiProvider } from './agentTypes';
@@ -71,6 +72,7 @@ export function createAgentCommandExecutor(
           summary: result.summary,
           controller: null,
         });
+        saveCurrentDiagramVersion('auto_before_diagram_replace', true);
         useDiagramStore.getState().replaceDiagram(result.diagram, '生成结构图');
         useAgentStore.getState().clear();
         const message = '未配置 AI，已使用本地规划器生成结构图';
@@ -142,6 +144,7 @@ export function createAgentCommandExecutor(
       if (result.kind === 'operations') {
         useDiagramStore.getState().applyOperations(result.operations, result.summary);
       } else {
+        saveCurrentDiagramVersion('auto_before_diagram_replace', true);
         useDiagramStore.getState().replaceDiagram(result.diagram, result.summary);
       }
       useAgentStore.getState().clear();

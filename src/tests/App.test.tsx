@@ -28,7 +28,19 @@ describe('competition app', () => {
     expect(screen.getByText('任务列表')).toBeInTheDocument();
     expect(screen.queryByText('系统反问')).not.toBeInTheDocument();
     expect(screen.getByText('版本管理')).toBeInTheDocument();
-    expect(screen.getByText('仅收录明确语音保存的版本')).toBeInTheDocument();
+    expect(screen.getByText('手动保存与替换前自动备份')).toBeInTheDocument();
+  });
+
+  it('saves the current diagram from the canvas header', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: '保存当前图' }));
+
+    expect(useVersionStore.getState().versions[0]).toMatchObject({
+      kind: 'manual',
+      sourceAction: 'manual_button',
+    });
   });
 
   it('executes typed commands through the voice command controller', async () => {
@@ -82,7 +94,9 @@ describe('competition app', () => {
     render(<App />);
 
     expect(
-      screen.getByText('说“保存当前版本叫初始流程”，需要时说“恢复初始流程”。'),
+      screen.getByText(
+        '点击“保存当前图”或说“保存当前版本叫初始流程”，替换画布前会自动备份。',
+      ),
     ).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '打开工具手册' }));
     expect(screen.getByRole('dialog', { name: '工具手册' })).toBeInTheDocument();

@@ -10,6 +10,8 @@ describe('parseSimpleCommand', () => {
     ['把登录页改名为账号登录', 'update_node_text'],
     ['把验证码校验改成蓝色', 'update_node_style'],
     ['连接登录页到验证码校验', 'create_edge'],
+    ['生成一条线', 'create_edge'],
+    ['把5号圆形上的文字改成学校', 'update_node_text'],
     ['删除登录页到验证码校验的连线', 'delete_edge'],
     ['把失败分支改成红色虚线', 'update_edge_style'],
   ])('parses "%s" as %s', (text, intent) => {
