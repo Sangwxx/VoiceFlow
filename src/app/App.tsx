@@ -72,7 +72,7 @@ export function App() {
   const exceptionPathsHidden = useCanvasViewStore((state) => state.exceptionPathsHidden);
   const controller = useMemo(() => createBrowserVoiceController(), []);
   const taskListRef = useRef<HTMLOListElement>(null);
-  const recordingEnabled = !['idle', 'error', 'unsupported'].includes(voiceStatus);
+  const recordingEnabled = voiceStatus !== 'idle' && voiceStatus !== 'unsupported';
   const currentTask =
     voiceTasks.find((task) =>
       ['executing', 'verifying', 'needs_clarification', 'awaiting_confirmation'].includes(
