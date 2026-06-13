@@ -154,6 +154,7 @@ export function createVoiceController({
       }
       utteranceEnded = false;
       shouldListen = true;
+      useVoiceStore.getState().setStatus('recognizing');
       if (!provider.isSupported()) {
         useVoiceStore.setState({
           status: 'unsupported',

@@ -96,4 +96,41 @@ describe('WebSpeechProvider', () => {
     );
     expect(FakeRecognition.instance.start).toHaveBeenCalledTimes(1);
   });
+
+  it('reports when recognition starts but returns no text', () => {
+    vi.useFakeTimers();
+    const onError = vi.fn();
+    const provider = new WebSpeechProvider({
+      getWindow: fakeWindow,
+      noResultTimeoutMs: 100,
+    });
+
+    provider.start({ onResult: vi.fn(), onError });
+    vi.advanceTimersByTime(100);
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining('没有识别到文字') }),
+    );
+    expect(FakeRecognition.instance.stop).toHaveBeenCalled();
+  });
+
+  it('checks microphone access before starting browser recognition', async () => {
+    const stop = vi.fn();
+    const getUserMedia = vi.fn().mockResolvedValue({ getTracks: () => [{ stop }] });
+    const onError = vi.fn();
+    const provider = new WebSpeechProvider({
+      getWindow: () =>
+        ({
+          SpeechRecognition: FakeRecognition,
+          navigator: { mediaDevices: { getUserMedia } },
+        }) as unknown as Window,
+    });
+
+    provider.start({ onResult: vi.fn(), onError });
+    await vi.waitFor(() => expect(FakeRecognition.instance.start).toHaveBeenCalled());
+
+    expect(getUserMedia).toHaveBeenCalledWith({ audio: true });
+    expect(stop).toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
 });
