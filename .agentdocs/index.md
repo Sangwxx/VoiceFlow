@@ -19,3 +19,7 @@
 ## 已完成任务文档
 
 - `workflow/done/260613-project-audit-and-improvement.md`：项目审计、版本存储可靠性与画布分包优化。
+
+## 当前任务文档
+
+- `workflow/260613-competition-delivery-sprint.md`：参赛截止前的可解释消歧、延迟展示、演示材料与交付计划。

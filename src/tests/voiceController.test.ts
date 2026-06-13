@@ -53,6 +53,13 @@ describe('voiceController integration', () => {
     await controller.handleFinalTranscript('重做');
     expect(useDiagramStore.getState().diagram.layout.direction).toBe('left_to_right');
     expect(useCommandStore.getState().executionLog).toHaveLength(3);
+    expect(useCommandStore.getState().executionLog[0]).toMatchObject({
+      route: 'fast',
+      confidence: 1,
+    });
+    expect(useCommandStore.getState().executionLog[0].durationMs).toBeGreaterThanOrEqual(
+      0,
+    );
   });
 
   it('ignores ordinary commands while paused and resumes by voice', async () => {
@@ -143,6 +150,31 @@ describe('voiceController integration', () => {
     await controller.handleFinalTranscript('声成一张强化学西的流成图');
     expect(useVoiceStore.getState().correctedTranscript).toBe('生成一张强化学习的流程图');
     expect(useProposalStore.getState().proposal?.diagram.title).toBe('强化学习学习流程');
+  });
+
+  it('keeps Fast Path commands local without calling AI', async () => {
+    const provider = new MockVoiceProvider();
+    const complete = vi.fn();
+    const interpretCommand = vi.fn();
+    const controller = createVoiceController({
+      provider,
+      speechFeedback,
+      aiProvider: {
+        mode: 'real',
+        model: 'test-model',
+        complete,
+        interpretCommand,
+      },
+    });
+
+    await controller.handleFinalTranscript('撤销');
+
+    expect(complete).not.toHaveBeenCalled();
+    expect(interpretCommand).not.toHaveBeenCalled();
+    expect(useCommandStore.getState().executionLog[0]).toMatchObject({
+      route: 'fast',
+      rawText: '撤销',
+    });
   });
 
   it('sends unmatched speech to a real contextual Agent with the current diagram', async () => {
