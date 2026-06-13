@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { App } from '../app/App';
-import type { ClarificationRequest } from '../commands/simple/simpleTypes';
 import { useCommandStore } from '../stores/commandStore';
 import { useDiagramStore } from '../stores/diagramStore';
 import { useVersionStore } from '../stores/versionStore';
@@ -26,7 +25,7 @@ describe('competition app', () => {
     expect(screen.getByRole('region', { name: '画布区' })).toBeInTheDocument();
     expect(screen.getByText('实时文字')).toBeInTheDocument();
     expect(screen.getByText('任务列表')).toBeInTheDocument();
-    expect(screen.getByText('系统反问')).toBeInTheDocument();
+    expect(screen.queryByText('系统反问')).not.toBeInTheDocument();
     expect(screen.getByText('版本管理')).toBeInTheDocument();
     expect(screen.getByText('仅收录明确语音保存的版本')).toBeInTheDocument();
   });
@@ -46,30 +45,6 @@ describe('competition app', () => {
       'aria-pressed',
       'false',
     );
-  });
-
-  it('shows clarification inside the current-task question area', () => {
-    const request: ClarificationRequest = {
-      id: 'clarification-1',
-      originalCommand: '把失败分支改成红色虚线',
-      question: '你指的是哪条连线？',
-      candidates: [
-        { id: 'e1', kind: 'edge', label: '登录判断 → 登录页（否）' },
-        { id: 'e2', kind: 'edge', label: '登录成功 → 错误提示（失败）' },
-      ],
-      resolutionField: 'edgeId',
-      draft: {
-        intent: 'update_edge_style',
-        edgeText: '失败',
-        colorName: '红色',
-        lineType: 'dashed',
-      },
-    };
-    useCommandStore.getState().setPendingClarification(request);
-    render(<App />);
-
-    expect(screen.getByText('需要你的回答')).toBeInTheDocument();
-    expect(screen.getByText('登录成功 → 错误提示（失败）')).toBeInTheDocument();
   });
 
   it('shows only explicitly saved manual versions', () => {
@@ -122,6 +97,6 @@ describe('competition app', () => {
     expect(screen.getByText('横向布局')).toBeInTheDocument();
     expect(screen.getByText('正在执行')).toBeInTheDocument();
     expect(screen.getByText('92%')).toBeInTheDocument();
-    expect(screen.getByText('针对任务：横向布局')).toBeInTheDocument();
+    expect(screen.queryByText('针对任务：横向布局')).not.toBeInTheDocument();
   });
 });

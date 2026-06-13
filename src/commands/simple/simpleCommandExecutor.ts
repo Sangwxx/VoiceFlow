@@ -23,7 +23,6 @@ import { parseSimpleCommand } from './simpleCommandParser';
 import { matchGenericDrawingActions } from './genericDrawingMatcher';
 import type {
   ClarificationCandidate,
-  ClarificationRequest,
   ResolvedTarget,
   SimpleExecutionResult,
   SimpleOperationDraft,
@@ -408,22 +407,15 @@ async function requireNode(
   draft: SimpleOperationDraft,
   field: string,
   query: string,
-  originalCommand: string,
+  _originalCommand: string,
 ): Promise<DiagramNode | null> {
+  void _originalCommand;
   const resolvedId = draft.resolved?.[field];
   if (resolvedId) return diagram.nodes.find((node) => node.id === resolvedId) ?? null;
   const result = resolveNode(diagram, query, useCommandStore.getState().lastTarget?.id);
   if (result.status === 'found') return result.item;
-  const candidates =
-    result.status === 'multiple' ? result.candidates : result.suggestions;
-  if (candidates.length) {
-    setClarification(
-      originalCommand,
-      draft,
-      field,
-      candidates.map(nodeCandidate),
-      `你指的是哪个节点？`,
-    );
+  if (result.status === 'multiple' && result.candidates.length) {
+    return result.candidates[0];
   } else {
     useCommandStore.getState().setPendingClarification(null);
     useCommandStore.getState().setLastMessage(`没有找到“${query}”节点。`);
@@ -434,8 +426,9 @@ async function requireNode(
 async function requireEdge(
   diagram: Diagram,
   draft: Extract<SimpleOperationDraft, { intent: 'delete_edge' | 'update_edge_style' }>,
-  originalCommand: string,
+  _originalCommand: string,
 ): Promise<DiagramEdge | null> {
+  const originalCommand = _originalCommand;
   const resolvedId = draft.resolved?.edgeId;
   if (resolvedId) return diagram.edges.find((edge) => edge.id === resolvedId) ?? null;
   let result;
@@ -465,16 +458,8 @@ async function requireEdge(
     );
   }
   if (result.status === 'found') return result.item;
-  const candidates =
-    result.status === 'multiple' ? result.candidates : result.suggestions;
-  if (candidates.length) {
-    setClarification(
-      originalCommand,
-      draft,
-      'edgeId',
-      candidates.map((edge) => edgeCandidate(diagram, edge)),
-      '你指的是哪条连线？',
-    );
+  if (result.status === 'multiple' && result.candidates.length) {
+    return result.candidates[0];
   } else {
     useCommandStore.getState().setPendingClarification(null);
     useCommandStore.getState().setLastMessage('没有找到对应连线。');
@@ -488,41 +473,10 @@ async function requireOutgoingEdge(
   outgoing: DiagramEdge[],
   originalCommand: string,
 ): Promise<DiagramEdge | null> {
+  void originalCommand;
   const resolvedId = draft.resolved?.replacedEdgeId;
   if (resolvedId) return outgoing.find((edge) => edge.id === resolvedId) ?? null;
-  if (outgoing.length === 1) return outgoing[0];
-  setClarification(
-    originalCommand,
-    draft,
-    'replacedEdgeId',
-    outgoing.map((edge) => edgeCandidate(diagram, edge)),
-    '请选择要插入的具体分支。',
-  );
-  return null;
-}
-
-function setClarification(
-  originalCommand: string,
-  draft: SimpleOperationDraft,
-  resolutionField: string,
-  candidates: ClarificationCandidate[],
-  question: string,
-): void {
-  const spokenQuestion = candidates.length
-    ? `${question} ${candidates
-        .map((candidate, index) => `${ordinalLabel(index)}，${candidate.label}`)
-        .join('；')}`
-    : question;
-  const request: ClarificationRequest = {
-    id: createId('clarification'),
-    originalCommand,
-    question: spokenQuestion,
-    candidates,
-    draft,
-    resolutionField,
-  };
-  useCommandStore.getState().setPendingClarification(request);
-  useCommandStore.getState().setLastMessage(spokenQuestion);
+  return outgoing[0] ?? null;
 }
 
 function clarificationResult(): SimpleExecutionResult {
@@ -564,10 +518,6 @@ function chooseCandidate(
   return matches.length === 1 ? matches[0] : null;
 }
 
-function ordinalLabel(index: number): string {
-  return ['第一个', '第二个', '第三个', '第四个'][index] ?? `第${index + 1}个`;
-}
-
 function makeNode(label: string, type: DiagramNode['type']): DiagramNode {
   return { id: createId('node'), label, type };
 }
@@ -599,15 +549,6 @@ function operation<T extends DiagramOperation['type']>(
     description,
     ...payload,
   } as Extract<DiagramOperation, { type: T }>;
-}
-
-function nodeCandidate(node: DiagramNode): ClarificationCandidate {
-  return { id: node.id, label: node.label, kind: 'node', detail: node.type };
-}
-
-function edgeCandidate(diagram: Diagram, edge: DiagramEdge): ClarificationCandidate {
-  const label = describeEdge(diagram, edge);
-  return { id: edge.id, label, kind: 'edge', detail: edge.label };
 }
 
 function nodeTarget(node: DiagramNode): ResolvedTarget {

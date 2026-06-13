@@ -7,7 +7,6 @@ type FastCommandDefinition = {
 };
 
 export const highPriorityCommands: FastCommandDefinition[] = [
-  { command: 'confirm', phrases: ['确认', '确认使用', '应用这个图', '就用这个'] },
   { command: 'cancel', phrases: ['取消', '取消当前操作', '算了'] },
   { command: 'pause', phrases: ['暂停', '停一下', '先别动', '停止执行'] },
   { command: 'resume', phrases: ['继续', '继续执行', '恢复执行'] },

@@ -1,7 +1,6 @@
 import type { SpeechFeedbackService } from '../../services/speechFeedbackService';
 import { useAgentStore } from '../../stores/agentStore';
 import { useCommandStore } from '../../stores/commandStore';
-import { createDiagramProposal, useProposalStore } from '../../stores/proposalStore';
 import { useDiagramStore } from '../../stores/diagramStore';
 import type { FastCommandExecutionResult } from '../fast/fastCommandExecutor';
 import { normalizeAgentResult } from './agentNormalizer';
@@ -72,17 +71,9 @@ export function createAgentCommandExecutor(
           summary: result.summary,
           controller: null,
         });
-        useProposalStore
-          .getState()
-          .setProposal(
-            createDiagramProposal(
-              'agent',
-              result.diagram,
-              '确认生成结构图',
-              result.summary,
-            ),
-          );
-        const message = '结构图预览已生成，请说确认或取消';
+        useDiagramStore.getState().replaceDiagram(result.diagram, '生成结构图');
+        useAgentStore.getState().clear();
+        const message = '结构图已生成';
         useCommandStore.getState().setLastMessage(message);
         void speechFeedback.speak(message);
         return { status: 'success', message } as const;
@@ -126,19 +117,17 @@ export function createAgentCommandExecutor(
         result = normalizeAgentResult(repairedOutput, diagram);
       }
       if (result.kind === 'clarification') {
+        const message = '指令信息不足，已停止执行';
         useAgentStore.getState().setStateForTask({
-          status: 'clarifying',
+          status: 'error',
           explanation: result.explanation,
-          summary: result.question,
-          conversation: [
-            ...state.conversation,
-            { role: 'assistant', content: result.question },
-          ],
+          summary: message,
+          conversation: state.conversation,
           controller: null,
         });
-        useCommandStore.getState().setLastMessage(result.question);
-        void speechFeedback.speak(result.question);
-        return { status: 'clarification', message: result.question } as const;
+        useCommandStore.getState().setLastMessage(message);
+        void speechFeedback.speak(message);
+        return { status: 'error', message } as const;
       }
 
       useAgentStore.getState().setStateForTask({
@@ -148,22 +137,13 @@ export function createAgentCommandExecutor(
         summary: result.summary,
         controller: null,
       });
-      useProposalStore
-        .getState()
-        .setProposal(
-          createDiagramProposal(
-            'agent',
-            result.diagram,
-            result.kind === 'operations' ? '确认 AI 修改图表' : '确认 AI 生成图表',
-            result.summary,
-            undefined,
-            result.kind === 'operations' ? result.operations : undefined,
-          ),
-        );
-      const message =
-        result.kind === 'operations'
-          ? 'AI 修改方案预览已生成，请说确认或取消'
-          : 'AI 图表预览已生成，请说确认或取消';
+      if (result.kind === 'operations') {
+        useDiagramStore.getState().applyOperations(result.operations, result.summary);
+      } else {
+        useDiagramStore.getState().replaceDiagram(result.diagram, result.summary);
+      }
+      useAgentStore.getState().clear();
+      const message = result.kind === 'operations' ? 'AI 修改已应用' : 'AI 图表已生成';
       useCommandStore.getState().setLastMessage(message);
       void speechFeedback.speak(message);
       return { status: 'success', message } as const;
@@ -194,24 +174,5 @@ export function createAgentCommandExecutor(
       useAgentStore.getState().setStateForTask({ conversation: [] });
       return request(text, intent);
     },
-    answerClarification(text: string): Promise<FastCommandExecutionResult> {
-      const state = useAgentStore.getState();
-      if (!state.intent || !state.originalCommand) {
-        return Promise.resolve({
-          status: 'ignored',
-          message: '当前没有待澄清的 AI 请求',
-        });
-      }
-      useAgentStore.getState().setStateForTask({
-        conversation: [...state.conversation, { role: 'user', content: text }],
-      });
-      return request(state.originalCommand, state.intent);
-    },
   };
-}
-
-export function confirmAgentPreview(): boolean {
-  const confirmed = useProposalStore.getState().confirm();
-  if (confirmed) useAgentStore.getState().clear();
-  return confirmed;
 }

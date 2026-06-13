@@ -1,9 +1,6 @@
 ﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  createAgentCommandExecutor,
-  confirmAgentPreview,
-} from '../commands/agent/agentCommandExecutor';
+import { createAgentCommandExecutor } from '../commands/agent/agentCommandExecutor';
 import type { AiProvider } from '../commands/agent/agentTypes';
 import type { SpeechFeedbackService } from '../services/speechFeedbackService';
 import { useAgentStore } from '../stores/agentStore';
@@ -20,7 +17,7 @@ describe('agentCommandExecutor', () => {
     useDiagramStore.getState().reset();
   });
 
-  it('previews without mutating, confirms atomically and supports undo', async () => {
+  it('applies generated diagrams directly and supports undo', async () => {
     const original = useDiagramStore.getState().diagram;
     const executor = createAgentCommandExecutor(
       diagramProvider('architecture'),
@@ -28,21 +25,18 @@ describe('agentCommandExecutor', () => {
     );
     await executor.execute('画一个包含网关、服务和数据库的系统架构图', 'create_diagram');
 
-    expect(useAgentStore.getState().status).toBe('preview');
-    expect(useDiagramStore.getState().diagram).toEqual(original);
-    expect(confirmAgentPreview()).toBe(true);
     expect(useDiagramStore.getState().diagram.diagramType).toBe('architecture');
     expect(useDiagramStore.getState().past).toHaveLength(1);
     expect(useDiagramStore.getState().undo()).toBe(true);
     expect(useDiagramStore.getState().diagram.id).toBe(original.id);
   });
 
-  it('enters clarification and resubmits the answer', async () => {
+  it('returns an error instead of blocking on Agent clarification', async () => {
     const executor = createAgentCommandExecutor(clarificationProvider(), feedback);
-    await executor.execute('把当前图整理清楚', 'modify_diagram');
-    expect(useAgentStore.getState().status).toBe('clarifying');
-    await executor.answerClarification('用户登录流程');
-    expect(useAgentStore.getState().status).toBe('preview');
+    await expect(
+      executor.execute('把当前图整理清楚', 'modify_diagram'),
+    ).resolves.toMatchObject({ status: 'error' });
+    expect(useAgentStore.getState().status).toBe('error');
   });
 
   it('cancels in-flight requests without changing the diagram', async () => {
@@ -65,14 +59,10 @@ describe('agentCommandExecutor', () => {
     expect(useDiagramStore.getState().diagram.id).toBe(originalId);
   });
 
-  it('previews contextual operations and commits them as one history entry', async () => {
-    const original = useDiagramStore.getState().diagram;
+  it('applies contextual operations directly as one history entry', async () => {
     const executor = createAgentCommandExecutor(operationProvider(), feedback);
     await executor.execute('把失败分支改成红色虚线', 'modify_diagram');
 
-    expect(useDiagramStore.getState().diagram).toEqual(original);
-    expect(useAgentStore.getState().status).toBe('preview');
-    expect(confirmAgentPreview()).toBe(true);
     expect(useDiagramStore.getState().past).toHaveLength(1);
     expect(
       useDiagramStore
@@ -144,7 +134,7 @@ describe('agentCommandExecutor', () => {
     await executor.execute('画一个学生选课用例图', 'create_diagram');
 
     expect(complete).not.toHaveBeenCalled();
-    expect(useAgentStore.getState().previewDiagram).toMatchObject({
+    expect(useDiagramStore.getState().diagram).toMatchObject({
       title: '学生选课用例图',
       diagramType: 'usecase',
     });

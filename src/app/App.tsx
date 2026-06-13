@@ -1,19 +1,15 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 
 import { CanvasErrorBoundary } from '../components/common/CanvasErrorBoundary';
-import { VisualClarificationCard } from '../components/common/VisualClarificationCard';
 import { ToolManual } from '../components/common/ToolManual';
 import { hideExceptionPaths } from '../components/canvas/canvasView';
 import { registerCanvasViewportApi } from '../services/canvasViewportService';
 import { BrowserSpeechFeedbackService } from '../services/speechFeedbackService';
-import { useAgentStore } from '../stores/agentStore';
 import { useCanvasViewStore } from '../stores/canvasViewStore';
 import { useCommandStore } from '../stores/commandStore';
 import { useDiagramStore } from '../stores/diagramStore';
-import { useProposalStore } from '../stores/proposalStore';
 import { useVersionStore } from '../stores/versionStore';
 import { useVoiceStore, type VoiceStatus } from '../stores/voiceStore';
-import { useWorkflowStore } from '../stores/workflowStore';
 import { createVoiceController } from '../voice/voiceController';
 import type { VoiceTask } from '../voice/voiceTaskSegmenter';
 import type { VoiceController } from '../voice/voiceTypes';
@@ -60,15 +56,8 @@ export function App() {
   const voiceError = useVoiceStore((state) => state.error);
   const commandPaused = useVoiceStore((state) => state.commandPaused);
   const voiceTasks = useVoiceStore((state) => state.taskQueue);
-  const pendingClarification = useCommandStore((state) => state.pendingClarification);
   const lastMessage = useCommandStore((state) => state.lastMessage);
-  const agent = useAgentStore();
-  const proposal = useProposalStore((state) => state.proposal);
   const versions = useVersionStore((state) => state.versions);
-  const workflowClarification = useWorkflowStore(
-    (state) => state.pendingVersionClarification,
-  );
-  const focusClarification = useWorkflowStore((state) => state.pendingFocusClarification);
   const exceptionPathsHidden = useCanvasViewStore((state) => state.exceptionPathsHidden);
   const controller = useMemo(() => createBrowserVoiceController(), []);
   const taskListRef = useRef<HTMLOListElement>(null);
@@ -90,10 +79,7 @@ export function App() {
     active?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [currentTask?.id, currentTask?.status]);
 
-  const visibleDiagram = exceptionPathsHidden
-    ? hideExceptionPaths(proposal?.diagram ?? diagram)
-    : (proposal?.diagram ?? diagram);
-  const isPreview = Boolean(proposal);
+  const visibleDiagram = exceptionPathsHidden ? hideExceptionPaths(diagram) : diagram;
 
   return (
     <main className={styles.appShell}>
@@ -129,8 +115,7 @@ export function App() {
             <small>
               {correctedTranscript
                 ? `本地校准 ${Math.round((correctionFeedback?.confidence ?? 0) * 100)}%：${correctedTranscript}`
-                : (voiceError ??
-                  (commandPaused ? '当前仅响应继续、取消和确认' : lastMessage))}
+                : (voiceError ?? (commandPaused ? '当前仅响应继续和取消' : lastMessage))}
             </small>
           </div>
         </section>
@@ -172,24 +157,6 @@ export function App() {
           </ol>
         </section>
 
-        <section className={styles.questionSection} aria-label="当前任务反问区">
-          <div className={styles.sectionHeading}>
-            <div>
-              <span>系统反问</span>
-              <small>
-                {currentTask ? `针对任务：${currentTask.text}` : '等待当前任务'}
-              </small>
-            </div>
-          </div>
-          <CurrentTaskQuestion
-            agent={agent}
-            pendingClarification={pendingClarification}
-            proposal={proposal}
-            workflowClarification={workflowClarification}
-            focusClarification={focusClarification}
-          />
-        </section>
-
         <section className={styles.versionSection} aria-label="版本管理">
           <div className={styles.sectionHeading}>
             <div>
@@ -216,18 +183,13 @@ export function App() {
         </section>
       </aside>
 
-      <section
-        className={`${styles.canvasArea} ${isPreview ? styles.previewArea : ''}`}
-        aria-label="画布区"
-      >
+      <section className={styles.canvasArea} aria-label="画布区">
         <header className={styles.canvasHeader}>
           <div>
             <span className={styles.eyebrow}>CANVAS</span>
             <h2>{visibleDiagram.title}</h2>
           </div>
-          <span className={isPreview ? styles.previewBadge : styles.readOnlyBadge}>
-            {isPreview ? '候选预览 · 请语音确认或取消' : '只读画布'}
-          </span>
+          <span className={styles.readOnlyBadge}>只读画布</span>
           <button
             className={styles.manualButton}
             type="button"
@@ -245,83 +207,6 @@ export function App() {
       </section>
       {manualOpen ? <ToolManual onClose={() => setManualOpen(false)} /> : null}
     </main>
-  );
-}
-
-function CurrentTaskQuestion({
-  agent,
-  pendingClarification,
-  proposal,
-  workflowClarification,
-  focusClarification,
-}: {
-  agent: ReturnType<typeof useAgentStore.getState>;
-  pendingClarification: ReturnType<
-    typeof useCommandStore.getState
-  >['pendingClarification'];
-  proposal: ReturnType<typeof useProposalStore.getState>['proposal'];
-  workflowClarification: ReturnType<
-    typeof useWorkflowStore.getState
-  >['pendingVersionClarification'];
-  focusClarification: ReturnType<
-    typeof useWorkflowStore.getState
-  >['pendingFocusClarification'];
-}) {
-  if (proposal) {
-    return (
-      <div className={styles.confirmationQuestion}>
-        <strong>是否确认应用当前候选图？</strong>
-        <p>{proposal.summary}</p>
-        <span>请说“确认”或“取消”</span>
-      </div>
-    );
-  }
-  if (agent.status === 'clarifying' || pendingClarification) {
-    return (
-      <VisualClarificationCard
-        title="需要你的回答"
-        status="等待语音回答"
-        originalCommand={pendingClarification?.originalCommand ?? agent.originalCommand}
-        reason={
-          agent.status === 'clarifying'
-            ? agent.summary
-            : (pendingClarification?.question ?? '')
-        }
-        candidates={pendingClarification?.candidates ?? []}
-      />
-    );
-  }
-  if (workflowClarification) {
-    return (
-      <QuestionCandidates
-        title="你想选择哪个版本？"
-        labels={workflowClarification.candidates.map((version) => version.name)}
-      />
-    );
-  }
-  if (focusClarification) {
-    return (
-      <QuestionCandidates
-        title="你想聚焦哪个节点？"
-        labels={focusClarification.map((node) => node.label)}
-      />
-    );
-  }
-  return <div className={styles.emptyQuestion}>当前任务没有需要回答的问题</div>;
-}
-
-function QuestionCandidates({ title, labels }: { title: string; labels: string[] }) {
-  return (
-    <div className={styles.confirmationQuestion}>
-      <strong>{title}</strong>
-      <ol>
-        {labels.map((label, index) => (
-          <li key={label}>
-            第 {index + 1} 个 · {label}
-          </li>
-        ))}
-      </ol>
-    </div>
   );
 }
 

@@ -9,13 +9,10 @@ import {
 import { routeCommand } from '../commands/router/commandRouter';
 import { createSimpleCommandExecutor } from '../commands/simple/simpleCommandExecutor';
 import type { SpeechFeedbackService } from '../services/speechFeedbackService';
-import { useAgentStore } from '../stores/agentStore';
 import { useCommandStore } from '../stores/commandStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import type { VoiceController, VoiceProvider } from './voiceTypes';
 import { createWorkflowCommandExecutor } from '../commands/workflow/workflowCommandExecutor';
-import { useWorkflowStore } from '../stores/workflowStore';
-import { useProposalStore } from '../stores/proposalStore';
 import { useDiagramStore } from '../stores/diagramStore';
 import { VoiceTaskSegmenter, type VoiceTask } from './voiceTaskSegmenter';
 import { calibrateAsrTranscript } from './localAsrCalibrator';
@@ -38,7 +35,6 @@ export function createVoiceController({
   let drainRequested = false;
   let taskCursor = 0;
   let tasks: VoiceTask[] = [];
-  const resolutionTaskIds = new Set<string>();
   let suppressFeedback = false;
   const segmenter = new VoiceTaskSegmenter();
   const executionFeedback: SpeechFeedbackService = {
@@ -58,42 +54,9 @@ export function createVoiceController({
 
   function appendTasks(nextTasks: VoiceTask[]): void {
     if (!nextTasks.length) return;
-    if (hasInteractionBlocker()) {
-      nextTasks.forEach((task) => resolutionTaskIds.add(task.id));
-      const insertionIndex =
-        tasks[taskCursor]?.status === 'executing' ? taskCursor + 1 : taskCursor;
-      tasks.splice(insertionIndex, 0, ...nextTasks);
-    } else {
-      tasks.push(...nextTasks);
-    }
+    tasks.push(...nextTasks);
     publishTasks();
     void drainTasks();
-  }
-
-  function hasInteractionBlocker(): boolean {
-    const workflow = useWorkflowStore.getState();
-    return Boolean(
-      useProposalStore.getState().proposal ||
-      useCommandStore.getState().pendingClarification ||
-      useAgentStore.getState().status === 'clarifying' ||
-      workflow.pendingVersionClarification ||
-      workflow.pendingFocusClarification,
-    );
-  }
-
-  function settleBlockedTasks(cancelled: boolean): void {
-    let changed = false;
-    tasks = tasks.map((task) => {
-      if (
-        task.status !== 'awaiting_confirmation' &&
-        task.status !== 'needs_clarification'
-      ) {
-        return task;
-      }
-      changed = true;
-      return { ...task, status: cancelled ? 'no_change' : 'completed' };
-    });
-    if (changed) publishTasks();
   }
 
   async function drainTasks(): Promise<void> {
@@ -107,7 +70,6 @@ export function createVoiceController({
       while (taskCursor < tasks.length) {
         const task = tasks[taskCursor];
         if (task.readiness === 'after_recording' && !utteranceEnded) break;
-        if (hasInteractionBlocker() && !resolutionTaskIds.has(task.id)) break;
         task.status = 'executing';
         publishTasks();
         suppressFeedback = !utteranceEnded;
@@ -119,24 +81,18 @@ export function createVoiceController({
             await Promise.resolve();
           }
           task.status =
-            result.status === 'clarification'
-              ? 'needs_clarification'
-              : useProposalStore.getState().proposal
-                ? 'awaiting_confirmation'
-                : result.status === 'success'
-                  ? 'completed'
-                  : result.status === 'ignored'
-                    ? 'no_change'
-                    : 'failed';
+            result.status === 'success'
+              ? 'completed'
+              : result.status === 'ignored'
+                ? 'no_change'
+                : 'failed';
         } catch {
           task.status = 'failed';
         } finally {
           suppressFeedback = false;
-          resolutionTaskIds.delete(task.id);
           taskCursor += 1;
           publishTasks();
         }
-        if (hasInteractionBlocker()) break;
       }
     } finally {
       drainingTasks = false;
@@ -240,48 +196,13 @@ export function createVoiceController({
           reason: `本地语音校准：${calibration.reason}`,
         };
       }
-      const pendingSimple = useCommandStore.getState().pendingClarification;
-      const agentClarifying = useAgentStore.getState().status === 'clarifying';
-      const workflowState = useWorkflowStore.getState();
-      const workflowClarifying =
-        workflowState.pendingVersionClarification ??
-        workflowState.pendingFocusClarification;
-      const hasPendingClarification = Boolean(
-        pendingSimple || agentClarifying || workflowClarifying,
-      );
-      if (route.route === 'unknown' && !hasPendingClarification) {
+      if (route.route === 'unknown') {
         route = {
           ...route,
           route: 'agent',
           confidence: 0.55,
           agentIntent: 'modify_diagram',
           reason: '规则未命中，交由上下文 Agent 判断并澄清',
-        };
-      }
-      if (agentClarifying && route.route !== 'fast') {
-        route = {
-          ...route,
-          route: 'agent',
-          confidence: 0.95,
-          agentIntent: useAgentStore.getState().intent ?? 'create_diagram',
-          reason: '处理待澄清的 AI 语音回答',
-        };
-      } else if (workflowClarifying && route.route !== 'fast') {
-        route = {
-          ...route,
-          route: 'workflow',
-          confidence: 0.95,
-          workflowIntent:
-            'action' in workflowClarifying ? workflowClarifying.action : 'focus_node',
-          reason: '处理待澄清的工作流选择',
-        };
-      } else if (pendingSimple && route.route !== 'fast') {
-        route = {
-          ...route,
-          route: 'simple',
-          confidence: 0.95,
-          simpleIntent: pendingSimple.draft.intent,
-          reason: '处理待澄清的语音回答',
         };
       }
       useCommandStore.getState().setRouteResult(route);
@@ -292,14 +213,6 @@ export function createVoiceController({
         result = await executeFastCommand(route.fastCommand);
       } else if (useVoiceStore.getState().commandPaused) {
         result = { status: 'ignored', message: '命令执行已暂停，请说继续或取消' };
-      } else if (useProposalStore.getState().proposal) {
-        result = { status: 'ignored', message: '当前候选图等待确认，请说确认或取消' };
-      } else if (agentClarifying) {
-        result = await agentExecutor.answerClarification(executionText);
-      } else if (workflowClarifying) {
-        result = await workflowExecutor.answerClarification(executionText);
-      } else if (pendingSimple) {
-        result = await simpleExecutor.answerClarification(executionText);
       } else if (route.route === 'simple') {
         result = await simpleExecutor.execute(executionText);
       } else if (route.route === 'workflow' && route.workflowIntent) {
@@ -316,14 +229,6 @@ export function createVoiceController({
       useCommandStore
         .getState()
         .addExecutionLog(createExecutionLog(route, result, startedAt));
-      if (
-        route.route === 'fast' &&
-        (route.fastCommand === 'confirm' || route.fastCommand === 'cancel') &&
-        result.status === 'success'
-      ) {
-        settleBlockedTasks(route.fastCommand === 'cancel');
-        void drainTasks();
-      }
       const voice = useVoiceStore.getState();
       if (voice.status !== 'speaking') {
         voice.setStatus(
@@ -356,7 +261,7 @@ function isCanvasMutationTask(task: VoiceTask): boolean {
   }
   return (
     task.route.route === 'fast' &&
-    ['layout_top_down', 'layout_left_to_right', 'apply_layout', 'confirm'].includes(
+    ['layout_top_down', 'layout_left_to_right', 'apply_layout'].includes(
       task.route.fastCommand ?? '',
     )
   );

@@ -51,7 +51,7 @@ describe('routeCommand', () => {
       route: 'agent',
       agentIntent: 'create_diagram',
     });
-    expect(routeCommand('确认')).toMatchObject({ route: 'fast', fastCommand: 'confirm' });
+    expect(routeCommand('确认')).toMatchObject({ route: 'unknown' });
     expect(routeCommand('生成一张强化学习的学习流程图')).toMatchObject({
       route: 'agent',
       agentIntent: 'create_diagram',

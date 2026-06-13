@@ -1,4 +1,3 @@
-import { confirmAgentPreview } from '../agent/agentCommandExecutor';
 import type { RouteResult } from '../router/routeTypes';
 import { createApplyLayoutOperation } from '../../core/operations/operationFactory';
 import { getCanvasViewportApi } from '../../services/canvasViewportService';
@@ -35,12 +34,7 @@ export function createFastCommandExecutor({
     command: FastCommandName,
   ): Promise<FastCommandExecutionResult> {
     const voice = useVoiceStore.getState();
-    if (
-      voice.commandPaused &&
-      command !== 'resume' &&
-      command !== 'cancel' &&
-      command !== 'confirm'
-    ) {
+    if (voice.commandPaused && command !== 'resume' && command !== 'cancel') {
       return { status: 'ignored', message: '命令执行已暂停，请说继续或取消' };
     }
 
@@ -50,10 +44,6 @@ export function createFastCommandExecutor({
     if (command === 'redo' && useDiagramStore.getState().future.length === 0) {
       return noChange('暂无可重做操作');
     }
-    if (command === 'confirm' && !useProposalStore.getState().proposal) {
-      return noChange('当前没有待确认的图表');
-    }
-
     try {
       let message = '';
       switch (command) {
@@ -131,9 +121,6 @@ export function createFastCommandExecutor({
           useCommandStore.getState().clearPending();
           useVoiceStore.getState().clearInterimTranscript();
           message = '已取消当前待处理命令';
-          break;
-        case 'confirm':
-          message = confirmAgentPreview() ? '已确认使用候选图表' : '当前没有待确认的图表';
           break;
         case 'list_versions': {
           const names = useVersionStore

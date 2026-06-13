@@ -18,6 +18,8 @@
 
 ## 已完成任务文档
 
+- `workflow/done/260613-remove-confirmation-questions.md`：删除系统确认与反问流程，改为确定性选择和校验后直接执行。
+
 - `workflow/done/260613-general-structure-diagram.md`：通用结构图生成、低复杂度模型协议与确认队列恢复。
 - `workflow/done/260613-project-audit-and-improvement.md`：项目审计、版本存储可靠性与画布分包优化。
 - `workflow/done/260613-competition-delivery-sprint.md`：参赛交付冲刺，可解释消歧、延迟展示、演示材料与 CI。

@@ -142,52 +142,37 @@ describe('simpleCommandExecutor', () => {
     ).toBe(false);
   });
 
-  it('clarifies ambiguous failure branches by ordinal answer', async () => {
+  it('selects the first best matching failure branch directly', async () => {
     const executor = createSimpleCommandExecutor(speechFeedback);
 
     await expect(executor.execute('把失败分支改成红色虚线')).resolves.toMatchObject({
-      status: 'clarification',
-    });
-    expect(useCommandStore.getState().pendingClarification?.candidates.length).toBe(2);
-
-    await expect(executor.answerClarification('第二个')).resolves.toMatchObject({
       status: 'success',
       intent: 'update_edge_style',
     });
     expect(useCommandStore.getState().pendingClarification).toBeNull();
     expect(
-      useDiagramStore.getState().diagram.edges.find((edge) => edge.label === '失败')
-        ?.style?.stroke,
-    ).toBe('#ff4d4f');
+      useDiagramStore
+        .getState()
+        .diagram.edges.some(
+          (edge) => edge.type === 'dashed' && edge.style?.stroke === '#ff4d4f',
+        ),
+    ).toBe(true);
   });
 
-  it('clarifies which outgoing branch receives an inserted node', async () => {
+  it('uses the first outgoing branch when inserting a node', async () => {
     const executor = createSimpleCommandExecutor(speechFeedback);
 
     await expect(
       executor.execute('在是否已登录后面加一个会话检查节点'),
-    ).resolves.toMatchObject({ status: 'clarification' });
-    expect(useCommandStore.getState().pendingClarification?.resolutionField).toBe(
-      'replacedEdgeId',
-    );
-
-    await executor.answerClarification('第一个');
+    ).resolves.toMatchObject({ status: 'success' });
     expect(
       useDiagramStore.getState().diagram.nodes.some((node) => node.label === '会话检查'),
     ).toBe(true);
   });
 
-  it('accepts a clarification candidate by spoken name', async () => {
+  it('does not leave pending clarification after deterministic selection', async () => {
     const executor = createSimpleCommandExecutor(speechFeedback);
     await executor.execute('把失败分支改成红色虚线');
-    const candidate = useCommandStore.getState().pendingClarification?.candidates[1];
-
-    await executor.answerClarification(candidate?.label ?? '');
-
     expect(useCommandStore.getState().pendingClarification).toBeNull();
-    expect(
-      useDiagramStore.getState().diagram.edges.find((edge) => edge.label === '失败')
-        ?.type,
-    ).toBe('dashed');
   });
 });
