@@ -25,7 +25,14 @@ export function validateOperation(diagram: Diagram, operation: DiagramOperation)
       return;
     case 'delete_node':
     case 'update_node':
+    case 'move_node':
       requireExisting(nodeIds, operation.nodeId, '节点');
+      if (
+        operation.type === 'move_node' &&
+        (!Number.isFinite(operation.position.x) || !Number.isFinite(operation.position.y))
+      ) {
+        throw new OperationValidationError('节点位置必须是有效坐标。');
+      }
       if (
         operation.type === 'update_node' &&
         operation.patch.id !== undefined &&

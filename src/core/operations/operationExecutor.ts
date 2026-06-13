@@ -73,6 +73,14 @@ function applyOperation(diagram: Diagram, operation: DiagramOperation): Diagram 
           : node,
       );
       return diagram;
+    case 'move_node':
+      diagram.nodes = diagram.nodes.map((node) =>
+        node.id === operation.nodeId
+          ? { ...node, position: { ...operation.position } }
+          : node,
+      );
+      diagram.layout.autoLayout = false;
+      return diagram;
     case 'create_edge':
       diagram.edges.push(cloneEdge(operation.edge));
       return diagram;

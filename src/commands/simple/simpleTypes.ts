@@ -14,6 +14,7 @@ export type SimpleIntentName =
   | 'update_node_style'
   | 'duplicate_node'
   | 'resize_node'
+  | 'move_node'
   | 'create_edge'
   | 'delete_edge'
   | 'update_edge_style'
@@ -55,6 +56,12 @@ export type SimpleOperationDraft =
       scale?: number;
       width?: number;
       height?: number;
+      resolved?: Record<string, string>;
+    }
+  | {
+      intent: 'move_node';
+      targetText: string;
+      placement: 'left' | 'right' | 'top' | 'bottom' | 'center';
       resolved?: Record<string, string>;
     }
   | {

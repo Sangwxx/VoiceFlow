@@ -27,6 +27,12 @@ export type UpdateNodeOperation = BaseOperation & {
   patch: Partial<DiagramNode>;
 };
 
+export type MoveNodeOperation = BaseOperation & {
+  type: 'move_node';
+  nodeId: string;
+  position: DiagramNode['position'] & {};
+};
+
 export type CreateEdgeOperation = BaseOperation & {
   type: 'create_edge';
   edge: DiagramEdge;
@@ -55,6 +61,7 @@ export type DiagramOperation =
   | CreateNodeOperation
   | DeleteNodeOperation
   | UpdateNodeOperation
+  | MoveNodeOperation
   | CreateEdgeOperation
   | DeleteEdgeOperation
   | UpdateEdgeOperation

@@ -51,6 +51,16 @@ function verifyExpectedChange(
         oldNode && newNode && patchChanged(oldNode, newNode, operation.patch),
       );
     }
+    case 'move_node': {
+      const oldNode = findNode(before, operation.nodeId);
+      const newNode = findNode(after, operation.nodeId);
+      return Boolean(
+        oldNode &&
+          newNode &&
+          (oldNode.position?.x !== newNode.position?.x ||
+            oldNode.position?.y !== newNode.position?.y),
+      );
+    }
     case 'create_edge':
       return (
         !findEdge(before, operation.edge.id) &&
