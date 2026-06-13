@@ -64,6 +64,34 @@ export function App() {
   const focusedNodeId = useCanvasViewStore((state) => state.focusedNodeId);
   const selectedNodeId = useDiagramStore((state) => state.selectedNodeId);
   const controller = useMemo(() => createBrowserVoiceController(), []);
+  const latestExecution = executionLog[0];
+  const averageDuration = executionLog.length
+    ? Math.round(
+        executionLog.reduce((total, entry) => total + entry.durationMs, 0) /
+          executionLog.length,
+      )
+    : 0;
+  const fastPathRate = executionLog.length
+    ? Math.round(
+        (executionLog.filter((entry) => entry.route === 'fast').length /
+          executionLog.length) *
+          100,
+      )
+    : 0;
+  const routeAverages = (['fast', 'simple', 'workflow', 'agent'] as const).map(
+    (route) => {
+      const entries = executionLog.filter((entry) => entry.route === route);
+      return {
+        route,
+        durationMs: entries.length
+          ? Math.round(
+              entries.reduce((total, entry) => total + entry.durationMs, 0) /
+                entries.length,
+            )
+          : null,
+      };
+    },
+  );
 
   useEffect(() => {
     controller.startListening();
@@ -87,10 +115,9 @@ export function App() {
           <div className={styles.brandRow}>
             <span className={styles.logoMark}>VF</span>
             <span className={styles.productName}>VoiceFlow</span>
-            <span className={styles.phaseBadge}>阶段 5</span>
-            <span className={styles.mutedLabel}>阶段 3</span>
+            <span className={styles.phaseBadge}>AI 语音绘图</span>
           </div>
-          <p className={styles.tagline}>汇报美化 · 版本时间旅行 · 语音导出</p>
+          <p className={styles.tagline}>分层低延迟路由 · 上下文消歧 · 安全预览确认</p>
         </div>
         <div className={styles.documentStatus}>
           <div>
@@ -129,7 +156,7 @@ export function App() {
           </section>
           <section className={styles.panelCard}>
             <div className={styles.sectionHeading}>
-              <span>阶段 5 语音示例</span>
+              <span>核心语音示例</span>
               <span className={styles.successLabel}>WORKFLOW</span>
             </div>
             <ul className={styles.commandList}>
@@ -229,6 +256,45 @@ export function App() {
 
           <section className={styles.panelCard}>
             <div className={styles.sectionHeading}>
+              <span>智能决策指标</span>
+              <span className={styles.successLabel}>
+                {latestExecution?.route.toUpperCase() ?? 'READY'}
+              </span>
+            </div>
+            <dl className={styles.summaryGrid}>
+              <div>
+                <dt>本次耗时</dt>
+                <dd>{latestExecution ? `${latestExecution.durationMs} ms` : '--'}</dd>
+              </div>
+              <div>
+                <dt>路由置信度</dt>
+                <dd>{lastRoute ? `${Math.round(lastRoute.confidence * 100)}%` : '--'}</dd>
+              </div>
+              <div>
+                <dt>平均耗时</dt>
+                <dd>{executionLog.length ? `${averageDuration} ms` : '--'}</dd>
+              </div>
+              <div>
+                <dt>快速路径命中</dt>
+                <dd>{executionLog.length ? `${fastPathRate}%` : '--'}</dd>
+              </div>
+            </dl>
+            <p className={styles.resultMessage}>
+              {lastRoute?.reason ??
+                '确定性命令本地执行，复杂意图进入 Agent，低置信度主动澄清'}
+            </p>
+            <dl className={styles.operationSummary}>
+              {routeAverages.map(({ route, durationMs }) => (
+                <div key={route}>
+                  <dt>{route.toUpperCase()} 平均耗时</dt>
+                  <dd>{durationMs === null ? '--' : `${durationMs} ms`}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+
+          <section className={styles.panelCard}>
+            <div className={styles.sectionHeading}>
               <span>版本与导出</span>
               <span className={styles.mutedLabel}>{versions.length} 个版本</span>
             </div>
@@ -264,6 +330,9 @@ export function App() {
                 {agent.status === 'clarifying'
                   ? agent.summary
                   : pendingClarification?.question}
+              </p>
+              <p className={styles.resultMessage}>
+                消歧依据：当前指令匹配到多个候选目标，为避免误操作，系统暂停执行并请求语音确认。
               </p>
               {pendingClarification && (
                 <ol className={styles.candidateList}>

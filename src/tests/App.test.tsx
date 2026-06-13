@@ -7,7 +7,7 @@ import { useDiagramStore } from '../stores/diagramStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import type { ClarificationRequest } from '../commands/simple/simpleTypes';
 
-describe('phase 3 app', () => {
+describe('competition app', () => {
   beforeEach(() => {
     useDiagramStore.getState().reset();
     useVoiceStore.getState().reset();
@@ -18,11 +18,15 @@ describe('phase 3 app', () => {
     useVoiceStore.getState().reset();
   });
 
-  it('shows the phase 3 voice, command, history and transcript surfaces', async () => {
+  it('shows voice, decision metrics, command history and transcript surfaces', async () => {
     render(<App />);
 
-    expect(screen.getByText('阶段 3')).toBeInTheDocument();
+    expect(screen.getByText('AI 语音绘图')).toBeInTheDocument();
     expect(screen.getByText('Simple Path 示例')).toBeInTheDocument();
+    expect(screen.getByText('智能决策指标')).toBeInTheDocument();
+    expect(
+      screen.getByText('分层低延迟路由 · 上下文消歧 · 安全预览确认'),
+    ).toBeInTheDocument();
     expect(screen.getByText('历史状态')).toBeInTheDocument();
     expect(screen.getByText('最近命令')).toBeInTheDocument();
     expect(screen.getByText('实时字幕')).toBeInTheDocument();
