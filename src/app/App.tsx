@@ -18,7 +18,8 @@ import { WebSpeechProvider } from '../voice/webSpeechProvider';
 import { saveCurrentDiagramVersion } from '../services/diagramVersionService';
 import { FreeDrawingCanvas } from '../components/freeDrawing/FreeDrawingCanvas';
 import { useFreeDrawingStore } from '../stores/freeDrawingStore';
-import { useWorkspaceModeStore, type WorkspaceMode } from '../stores/workspaceModeStore';
+import { useWorkspaceModeStore } from '../stores/workspaceModeStore';
+import { switchWorkspaceMode } from '../services/workspaceModeService';
 import styles from './App.module.css';
 
 const FlowRenderer = lazy(() =>
@@ -96,16 +97,6 @@ export function App() {
   const visibleDiagram = exceptionPathsHidden ? hideExceptionPaths(diagram) : diagram;
   const activeTitle =
     workspaceMode === 'diagram' ? visibleDiagram.title : freeDrawingScene.title;
-
-  function switchWorkspaceMode(mode: WorkspaceMode): void {
-    useAgentStore.getState().clear();
-    useCommandStore
-      .getState()
-      .setLastMessage(
-        mode === 'diagram' ? '已切换到专业图表模式' : '已切换到自由画图模式',
-      );
-    useWorkspaceModeStore.getState().setMode(mode);
-  }
 
   async function submitTextCommand(): Promise<void> {
     const command = textCommand.trim();

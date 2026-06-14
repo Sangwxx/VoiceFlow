@@ -18,6 +18,7 @@ import { useWorkflowStore } from '../../stores/workflowStore';
 import { useCanvasViewStore } from '../../stores/canvasViewStore';
 import { useFreeDrawingStore } from '../../stores/freeDrawingStore';
 import { useWorkspaceModeStore } from '../../stores/workspaceModeStore';
+import { switchWorkspaceMode } from '../../services/workspaceModeService';
 
 export type FastCommandExecutionResult = {
   status: CommandExecutionStatus;
@@ -107,6 +108,12 @@ export function createFastCommandExecutor({
             return noChange('当前画布已经完成自动排版');
           }
           message = '已自动排版';
+          break;
+        case 'switch_to_free_drawing':
+          message = switchWorkspaceMode('free_drawing');
+          break;
+        case 'switch_to_diagram':
+          message = switchWorkspaceMode('diagram');
           break;
         case 'pause':
           useVoiceStore.getState().setCommandPaused(true);

@@ -7,6 +7,8 @@ export type FastCommandName =
   | 'layout_top_down'
   | 'layout_left_to_right'
   | 'apply_layout'
+  | 'switch_to_diagram'
+  | 'switch_to_free_drawing'
   | 'pause'
   | 'resume'
   | 'cancel'

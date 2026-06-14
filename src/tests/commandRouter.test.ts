@@ -15,6 +15,10 @@ describe('routeCommand', () => {
     ['停一下', 'pause'],
     ['继续执行', 'resume'],
     ['取消当前操作', 'cancel'],
+    ['切换到自由画图模式', 'switch_to_free_drawing'],
+    ['进入自由画图模式', 'switch_to_free_drawing'],
+    ['切换到专业图表模式', 'switch_to_diagram'],
+    ['返回专业图表', 'switch_to_diagram'],
   ])('routes "%s" to %s', (text, command) => {
     expect(routeCommand(text)).toMatchObject({
       route: 'fast',

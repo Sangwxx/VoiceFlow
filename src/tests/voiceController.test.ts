@@ -507,6 +507,32 @@ describe('voiceController integration', () => {
     expect(useDiagramStore.getState().diagram.id).toBe('login-flow');
   });
 
+  it('switches workspace modes through high-priority local voice commands', async () => {
+    const complete = vi.fn();
+    const controller = createVoiceController({
+      provider: new MockVoiceProvider(),
+      speechFeedback,
+      aiProvider: { mode: 'real', model: 'test-model', complete },
+    });
+
+    await expect(
+      controller.handleFinalTranscript('切换到自由画图模式'),
+    ).resolves.toMatchObject({
+      status: 'success',
+      message: '已切换到自由画图模式',
+    });
+    expect(useWorkspaceModeStore.getState().mode).toBe('free_drawing');
+
+    await expect(controller.handleFinalTranscript('返回专业图表')).resolves.toMatchObject(
+      {
+        status: 'success',
+        message: '已切换到专业图表模式',
+      },
+    );
+    expect(useWorkspaceModeStore.getState().mode).toBe('diagram');
+    expect(complete).not.toHaveBeenCalled();
+  });
+
   it('sends unmatched speech to a real contextual Agent with the current diagram', async () => {
     const provider = new MockVoiceProvider();
     const complete = vi.fn().mockResolvedValue({
