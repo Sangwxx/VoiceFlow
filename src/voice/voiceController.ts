@@ -54,7 +54,19 @@ export function createVoiceController({
 
   function appendTasks(nextTasks: VoiceTask[]): void {
     if (!nextTasks.length) return;
-    tasks.push(...nextTasks);
+    const previous = tasks.at(-1);
+    for (const [index, nextTask] of nextTasks.entries()) {
+      if (index === 0 && shouldMergeFinalFragment(previous, nextTask, utteranceEnded)) {
+        const text = `${previous.text}，${nextTask.text}`;
+        previous.text = text;
+        previous.route = routeCommand(text);
+        previous.source = 'final';
+        previous.readiness = 'after_recording';
+        previous.status = 'waiting_recording_end';
+      } else {
+        tasks.push(nextTask);
+      }
+    }
     publishTasks();
     void drainTasks();
   }
@@ -250,6 +262,22 @@ export function createVoiceController({
     },
   };
   return controller;
+}
+
+function shouldMergeFinalFragment(
+  previous: VoiceTask | undefined,
+  next: VoiceTask,
+  utteranceEnded: boolean,
+): previous is VoiceTask {
+  return Boolean(
+    !utteranceEnded &&
+    previous &&
+    previous.status === 'waiting_recording_end' &&
+    previous.acceptsFinalContinuation === true &&
+    previous.readiness === 'after_recording' &&
+    next.source === 'final' &&
+    next.readiness === 'after_recording',
+  );
 }
 
 function isCanvasMutationTask(task: VoiceTask): boolean {

@@ -23,6 +23,7 @@ export type VoiceTask = {
   readiness: VoiceTaskReadiness;
   status: VoiceTaskStatus;
   route: RouteResult;
+  acceptsFinalContinuation?: boolean;
 };
 
 const STRONG_BOUNDARY_PATTERN =
@@ -52,13 +53,12 @@ export class VoiceTaskSegmenter {
         this.provisionalTexts.push(key);
         return true;
       })
-      .map((part) => this.createTask(part, 'interim'));
+      .map((part) => this.createTask(part, 'interim', false));
   }
 
   ingestFinal(text: string): VoiceTask[] {
     const { complete, remainder } = splitByBoundaries(text);
-    const parts = [...complete, ...(remainder ? [remainder] : [])];
-    return parts
+    const completeTasks = complete
       .filter((part) => {
         const key = normalizeText(part);
         const provisionalIndex = this.provisionalTexts.indexOf(key);
@@ -68,14 +68,28 @@ export class VoiceTaskSegmenter {
         }
         return Boolean(key);
       })
-      .map((part) => this.createTask(part, 'final'));
+      .map((part) => this.createTask(part, 'final', false));
+    if (!remainder) return completeTasks;
+    const key = normalizeText(remainder);
+    const provisionalIndex = this.provisionalTexts.indexOf(key);
+    if (provisionalIndex >= 0) {
+      this.provisionalTexts.splice(provisionalIndex, 1);
+      return completeTasks;
+    }
+    return key
+      ? [...completeTasks, this.createTask(remainder, 'final', true)]
+      : completeTasks;
   }
 
   reset(): void {
     this.provisionalTexts = [];
   }
 
-  private createTask(text: string, source: VoiceTaskSource): VoiceTask {
+  private createTask(
+    text: string,
+    source: VoiceTaskSource,
+    acceptsFinalContinuation: boolean,
+  ): VoiceTask {
     const route = routeCommand(text);
     const readiness = isImmediateTask(route) ? 'immediate' : 'after_recording';
     this.sequence += 1;
@@ -87,6 +101,7 @@ export class VoiceTaskSegmenter {
       readiness,
       status: readiness === 'immediate' ? 'queued' : 'waiting_recording_end',
       route,
+      acceptsFinalContinuation,
     };
   }
 }

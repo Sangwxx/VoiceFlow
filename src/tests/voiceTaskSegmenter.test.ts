@@ -40,6 +40,23 @@ describe('VoiceTaskSegmenter', () => {
     ).toEqual(['纵向布局']);
   });
 
+  it('marks only an unfinished final remainder as accepting continuation', () => {
+    const segmenter = new VoiceTaskSegmenter();
+
+    expect(segmenter.ingestFinal('加一个节点叫审核然后')).toEqual([
+      expect.objectContaining({
+        text: '加一个节点叫审核',
+        acceptsFinalContinuation: false,
+      }),
+    ]);
+    expect(segmenter.ingestFinal('加一个节点叫归档')).toEqual([
+      expect.objectContaining({
+        text: '加一个节点叫归档',
+        acceptsFinalContinuation: true,
+      }),
+    ]);
+  });
+
   it('keeps shape placement clauses inside one composite drawing task', () => {
     expect(splitByBoundaries('画一个正方形，放左边，圆形，放右边')).toEqual({
       complete: [],

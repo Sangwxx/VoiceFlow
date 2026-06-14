@@ -178,6 +178,58 @@ describe('voiceController integration', () => {
     });
   });
 
+  it('merges multiple final recognition fragments from one complex utterance', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+
+    controller.startListening();
+    provider.emitFinal('帮我生成一个圆形和一个正方形');
+    provider.emitFinal('正方形放在左边圆形放在右边');
+
+    expect(useVoiceStore.getState().taskQueue).toHaveLength(1);
+    expect(useVoiceStore.getState().taskQueue[0]).toMatchObject({
+      text: '帮我生成一个圆形和一个正方形，正方形放在左边圆形放在右边',
+      status: 'waiting_recording_end',
+      route: { route: 'simple' },
+    });
+
+    provider.emitSilence();
+    await vi.waitFor(() => {
+      const diagram = useDiagramStore.getState().diagram;
+      expect(diagram.nodes).toHaveLength(2);
+      expect(
+        diagram.nodes.find((node) => node.label === '正方形')!.position!.x,
+      ).toBeLessThan(diagram.nodes.find((node) => node.label === '圆形')!.position!.x);
+    });
+  });
+
+  it('does not merge explicitly separated complex tasks from one final result', () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+
+    controller.startListening();
+    provider.emitFinal('加一个节点叫审核然后加一个节点叫归档');
+
+    expect(useVoiceStore.getState().taskQueue.map((task) => task.text)).toEqual([
+      '加一个节点叫审核',
+      '加一个节点叫归档',
+    ]);
+  });
+
+  it('does not merge complex final fragments after an explicit trailing boundary', () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+
+    controller.startListening();
+    provider.emitFinal('加一个节点叫审核然后');
+    provider.emitFinal('加一个节点叫归档');
+
+    expect(useVoiceStore.getState().taskQueue.map((task) => task.text)).toEqual([
+      '加一个节点叫审核',
+      '加一个节点叫归档',
+    ]);
+  });
+
   it('applies workflow changes and continues the ordered queue without confirmation', async () => {
     const provider = new MockVoiceProvider();
     const controller = createTestController(provider);

@@ -91,6 +91,10 @@ describe('routeCommand', () => {
       route: 'simple',
       simpleIntent: 'create_node',
     });
+    expect(routeCommand('帮我生成一个圆形和一个正方形')).toMatchObject({
+      route: 'simple',
+      simpleIntent: 'create_node',
+    });
     expect(routeCommand('放置一个三角形')).toMatchObject({
       route: 'simple',
       simpleIntent: 'create_node',

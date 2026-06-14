@@ -43,11 +43,9 @@ const COUNTS: Record<string, number> = {
 
 export function matchGenericDrawingActions(text: string): SimpleOperationDraft[] {
   const normalized = normalizeText(text);
-  if (!/^(?:画出|画|绘制出|绘制|创建|生成|添加|加|放置)/.test(normalized)) return [];
-  const content = normalized.replace(
-    /^(?:画出|画|绘制出|绘制|创建|生成|添加|加|放置)/,
-    '',
-  );
+  const command = normalized.replace(/^(?:请|帮我|请帮我)/, '');
+  if (!/^(?:画出|画|绘制出|绘制|创建|生成|添加|加|放置)/.test(command)) return [];
+  const content = command.replace(/^(?:画出|画|绘制出|绘制|创建|生成|添加|加|放置)/, '');
   const pattern = new RegExp(
     `([一二两三四五六七八九十\\d]*)(?:个|张|颗|只)?(红色|蓝色|绿色|黄色|灰色|紫色|橙色)?(${SHAPES.join('|')})`,
     'g',

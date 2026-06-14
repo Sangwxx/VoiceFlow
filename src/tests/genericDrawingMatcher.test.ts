@@ -70,4 +70,13 @@ describe('matchGenericDrawingActions', () => {
       expect.objectContaining({ label: '三角形', placement: 'right' }),
     ]);
   });
+
+  it('keeps polite basic shape generation on the local drawing path', () => {
+    const actions = matchGenericDrawingActions('帮我生成一个圆形和一个正方形');
+
+    expect(actions.map((action) => ('label' in action ? action.label : ''))).toEqual([
+      '圆形',
+      '正方形',
+    ]);
+  });
 });

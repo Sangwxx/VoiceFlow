@@ -23,6 +23,7 @@
 - `workflow/done/260614-semantic-spatial-operations.md`：语义相对位置、对齐、连线方向和画布空间摘要。
 - `workflow/done/260614-voice-task-segmentation.md`：区分组合绘图补充从句与真正的连续语音任务。
 - `workflow/done/260614-homophone-slot-calibration.md`：使用命令目标槽位与当前画布解决同音字歧义。
+- `workflow/done/260614-final-fragment-merging.md`：合并同一次录音中的多个 final 识别片段，避免完整指令被粉碎。
 - `workflow/done/260614-llm-diagram-generation.md`：完整图表由 LLM 主导生成，基础图形保持本地绘制，并增加文字测试入口。
 - `workflow/done/260613-remove-confirmation-questions.md`：删除系统确认与反问流程，改为确定性选择和校验后直接执行。
 

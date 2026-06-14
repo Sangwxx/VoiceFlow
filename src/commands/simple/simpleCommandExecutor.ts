@@ -103,7 +103,7 @@ export function createSimpleCommandExecutor(speechFeedback: SpeechFeedbackServic
     );
     const operations = [...nodeOperations, ...edgeOperations, ...moveOperations];
     const startsNewCanvas = /^(?:画出?|绘制出?|生成|创建)/.test(
-      normalizeText(originalCommand),
+      normalizeText(originalCommand).replace(/^(?:请|帮我|请帮我)/, ''),
     );
     const verification = startsNewCanvas
       ? replaceWithGenericDrawing(operations, createdNodes.length)
