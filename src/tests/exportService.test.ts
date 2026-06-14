@@ -56,8 +56,7 @@ describe('export service', () => {
 
   it('exports free drawing SVG as standalone vector content', async () => {
     const download = vi.fn();
-    const captureSvg = vi.fn();
-    const service = new BrowserExportService({ download, captureSvg });
+    const service = new BrowserExportService({ download });
     await service.export(
       {
         id: 'free-scene',
@@ -85,7 +84,19 @@ describe('export service', () => {
     expect(filename).toMatch(/\.svg$/);
     expect(svg).toContain('<circle');
     expect(svg).not.toContain('foreignObject');
-    expect(captureSvg).not.toHaveBeenCalled();
+  });
+
+  it('exports professional diagram SVG as standalone vector content', async () => {
+    const download = vi.fn();
+    const service = new BrowserExportService({ download });
+    await service.export(loginFlowDiagram, 'svg');
+
+    const [dataUrl, filename] = download.mock.calls[0];
+    const svg = decodeURIComponent(String(dataUrl).split(',')[1]);
+    expect(filename).toMatch(/\.svg$/);
+    expect(svg).toContain('用户登录流程');
+    expect(svg).toContain('marker-end="url(#arrow-');
+    expect(svg).not.toContain('foreignObject');
   });
 
   it('mounts a browser download link before clicking it', async () => {
@@ -106,21 +117,17 @@ describe('export service', () => {
     vi.useRealTimers();
   });
 
-  it.each([
-    ['svg', 'data:image/svg+xml,test'],
-    ['png', 'data:image/png,test'],
-  ] as const)('fits and captures %s', async (format, dataUrl) => {
+  it('fits and captures PNG', async () => {
     const download = vi.fn();
     const service = new BrowserExportService({
       download,
-      captureSvg: vi.fn().mockResolvedValue(dataUrl),
-      capturePng: vi.fn().mockResolvedValue(dataUrl),
+      capturePng: vi.fn().mockResolvedValue('data:image/png,test'),
       wait: vi.fn().mockResolvedValue(undefined),
     });
-    await service.export(loginFlowDiagram, format);
+    await service.export(loginFlowDiagram, 'png');
     expect(download).toHaveBeenCalledWith(
-      dataUrl,
-      expect.stringMatching(new RegExp(`\\.${format}$`)),
+      'data:image/png,test',
+      expect.stringMatching(/\.png$/),
     );
   });
 

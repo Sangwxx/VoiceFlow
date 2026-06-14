@@ -1,9 +1,10 @@
-import { toPng, toSvg } from 'html-to-image';
+import { toPng } from 'html-to-image';
 
 import { getCanvasElement } from '../../services/canvasElementService';
 import { getCanvasViewportApi } from '../../services/canvasViewportService';
 import type { Diagram } from '../diagram/diagramTypes';
 import type { FreeDrawingScene } from '../freeDrawing/freeDrawingTypes';
+import { diagramSvgDataUrl } from './diagramSvgSerializer';
 import { freeDrawingSvgDataUrl } from './freeDrawingSvgSerializer';
 
 export type ExportFormat = 'json' | 'svg' | 'png';
@@ -16,7 +17,6 @@ export interface ExportService {
 
 export type ExportDependencies = {
   download?: (url: string, filename: string) => void;
-  captureSvg?: (element: HTMLElement) => Promise<string>;
   capturePng?: (element: HTMLElement) => Promise<string>;
   wait?: (milliseconds: number) => Promise<void>;
 };
@@ -61,6 +61,8 @@ export class BrowserExportService implements ExportService {
       );
     } else if (format === 'svg' && isFreeDrawingScene(document)) {
       url = freeDrawingSvgDataUrl(document);
+    } else if (format === 'svg') {
+      url = diagramSvgDataUrl(document);
     } else {
       const viewport = getCanvasViewportApi();
       const element = getCanvasElement();
@@ -75,14 +77,9 @@ export class BrowserExportService implements ExportService {
         cacheBust: true,
         filter: shouldIncludeInExport,
       };
-      url =
-        format === 'svg'
-          ? await (this.dependencies.captureSvg ?? ((node) => toSvg(node, options)))(
-              element,
-            )
-          : await (this.dependencies.capturePng ?? ((node) => toPng(node, options)))(
-              element,
-            );
+      url = await (this.dependencies.capturePng ?? ((node) => toPng(node, options)))(
+        element,
+      );
     }
     (this.dependencies.download ?? triggerDownload)(url, filename);
     if (format === 'json') {
