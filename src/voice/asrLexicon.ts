@@ -144,6 +144,7 @@ export const ASR_ERROR_MAPPINGS: Array<[RegExp, string]> = [
   [/排板/g, '排版'],
   [/撤消/g, '撤销'],
   [/到出/g, '导出'],
+  [/导出城(?=\s*(?:svg|png|json|矢量图|图片))/gi, '导出成'],
   [/横像/g, '横向'],
   [/纵像/g, '纵向'],
   [/看泉图/g, '看全图'],

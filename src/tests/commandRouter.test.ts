@@ -154,6 +154,18 @@ describe('routeCommand', () => {
       route: 'fast',
       fastCommand: 'export_svg',
     });
+    expect(routeCommand('导出城 SVG 格式')).toMatchObject({
+      route: 'fast',
+      fastCommand: 'export_svg',
+    });
+    expect(routeCommand('请把当前画布导出成 SVG 文件')).toMatchObject({
+      route: 'fast',
+      fastCommand: 'export_svg',
+    });
+    expect(routeCommand('生成一个导出 SVG 格式的流程图')).toMatchObject({
+      route: 'agent',
+      agentIntent: 'create_diagram',
+    });
     expect(routeCommand('聚焦登录页')).toMatchObject({
       route: 'workflow',
       workflowIntent: 'focus_node',

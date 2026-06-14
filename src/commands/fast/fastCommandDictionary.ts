@@ -74,5 +74,26 @@ export function matchHighPriorityCommand(text: string) {
 }
 
 export function matchFastCommand(text: string) {
-  return matchDefinitions(text, fastCommandDictionary);
+  if (isDiagramGenerationDescription(text)) return null;
+  return matchStructuredExport(text) ?? matchDefinitions(text, fastCommandDictionary);
+}
+
+function matchStructuredExport(normalizedText: string): FastCommandMatch | null {
+  if (!/(?:导出|保存|输出)/.test(normalizedText)) return null;
+  if (/(?:svg|矢量图)/.test(normalizedText)) {
+    return { command: 'export_svg', confidence: 0.98 };
+  }
+  if (/json/.test(normalizedText)) {
+    return { command: 'export_json', confidence: 0.98 };
+  }
+  if (/(?:png|图片|图像)/.test(normalizedText)) {
+    return { command: 'export_png', confidence: 0.98 };
+  }
+  return null;
+}
+
+function isDiagramGenerationDescription(normalizedText: string): boolean {
+  return /(?:生成|画|绘制|创建).*(?:流程图|架构图|组织结构图|用例图|思维导图|结构图)/.test(
+    normalizedText,
+  );
 }

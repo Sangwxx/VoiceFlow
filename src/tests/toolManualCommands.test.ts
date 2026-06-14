@@ -140,13 +140,15 @@ describe('工具手册命令覆盖', () => {
     },
   );
 
-  it.each(['导出这个图表', '把当前图导出为图片', '把当前图导出为 SVG'] as const)(
-    '本地执行自然导出命令：%s',
-    async (command) => {
-      const result = await executeFast(command);
-      expect(result.status, `${command}：${result.message}`).toBe('success');
-    },
-  );
+  it.each([
+    '导出这个图表',
+    '把当前图导出为图片',
+    '把当前图导出为 SVG',
+    '导出城 SVG 格式',
+  ] as const)('本地执行自然导出命令：%s', async (command) => {
+    const result = await executeFast(command);
+    expect(result.status, `${command}：${result.message}`).toBe('success');
+  });
 
   it('依次执行画布控制命令', async () => {
     await expect(executeFast('看全图')).resolves.toMatchObject({ status: 'success' });

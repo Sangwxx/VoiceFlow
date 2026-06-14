@@ -38,6 +38,17 @@ describe('localAsrCalibrator', () => {
     });
   });
 
+  it('corrects export command homophones without changing the requested format', () => {
+    expect(
+      calibrateAsrTranscript('到出城 SVG 格式', {
+        diagram: loginFlowDiagram,
+      }),
+    ).toMatchObject({
+      correctedText: '导出成 SVG 格式',
+      changed: true,
+    });
+  });
+
   it('uses phonetic similarity and edit distance for domain terms', () => {
     expect(
       calibrateAsrTranscript('请重新排板', { diagram: loginFlowDiagram }).correctedText,
@@ -110,7 +121,7 @@ describe('localAsrCalibrator', () => {
     expect(stats).toEqual({
       canonicalTerms: 106,
       aliases: 51,
-      errorMappings: 19,
+      errorMappings: 20,
       phoneticGroups: 71,
     });
     expect(
