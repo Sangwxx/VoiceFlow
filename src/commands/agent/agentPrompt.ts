@@ -12,7 +12,9 @@ export function buildAgentPrompt(request: AgentRequest): string {
     isModification
       ? '修改现有图表时返回：{"kind":"operations","explanation":"...","summary":"...","operations":[...]}。'
       : '生成图表时返回：{"kind":"diagram","title":"...","diagramType":"...","direction":"top_down|left_to_right","nodes":[{"id":"n1","label":"...","type":"..."}],"edges":[{"from":"n1","to":"n2","label":"可选"}],"groups":[{"label":"可选","nodeIds":["n1"]}],"summary":"..."}。',
-    '信息不足时返回：{"kind":"clarification","explanation":"...","question":"..."}。',
+    isModification
+      ? '只有完全无法确定修改目标时才允许返回：{"kind":"clarification","explanation":"...","question":"..."}。'
+      : '创建请求只要明确表达画、生成或创建某类图，就视为信息充足。缺少主题、节点或步骤细节时必须根据图表类型和用户形容词主动补全，绝对不得返回 clarification。',
     '图表类型可选：flowchart,architecture,organization,dataflow,usecase,mindmap,framework,table,generic。根据用户原话和主题选择，不要默认流程图。',
     '节点类型可选：start,end,process,decision,database,service,user,external,group。',
     '支持的连线类型：solid,dashed,highlight,weak。',
@@ -20,7 +22,7 @@ export function buildAgentPrompt(request: AgentRequest): string {
       ? 'operations 数组中的每一项都必须包含合法的 Operation type。只允许 apply_layout、create_node、delete_node、update_node、move_node、set_relative_position、align_nodes、create_edge、delete_edge、update_edge、set_edge_endpoints、insert_node_after。process、user、decision 等是 node.type，绝对不能作为 Operation type。目标必须使用当前图表中的真实 ID；新 ID 必须唯一。不得修改节点 ID 或连线 ID。相对定位使用 {"type":"set_relative_position","nodeId":"待移动ID","referenceNodeId":"参考ID","relation":"left_of|right_of|above|below"}；水平或垂直对齐使用 {"type":"align_nodes","nodeIds":["真实ID"],"axis":"horizontal|vertical"}；修改箭头方向使用 {"type":"set_edge_endpoints","edgeId":"真实ID","from":"起点真实ID","to":"终点真实ID"}；修改文字使用 update_node，并在 patch 中提供 label。'
       : '',
     '必须围绕用户给出的具体主题生成内容。不要使用“核心概念、方法与工具、实践应用”等通用占位词，除非用户明确要求。',
-    '用户未列出具体节点时，请基于主题知识主动补全合理结构；通常生成 5 到 14 个节点，复杂主题可以更多，但避免无意义堆砌。',
+    '用户未列出具体节点时，请基于主题知识主动补全合理结构；通常生成 5 到 14 个节点，复杂主题可以更多，但“最简单”“最简”等请求应只生成完成表达所需的最少节点。',
     '流程图需要表达真实步骤、判断与分支；架构图需要表达层次、组件和依赖；组织结构图需要表达上下级；用例图需要表达参与者与用例；思维导图需要围绕中心主题发散；表格需要表达对比维度与内容。',
     '用例图使用 user 表示参与者、process 表示用例；组织结构图使用 group/process；表格使用 group 表示表头或分区、process 表示单元内容。',
     '仅在用户明确要求流程图时使用开始、结束、判断和分支。',

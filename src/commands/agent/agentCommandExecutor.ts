@@ -124,7 +124,12 @@ export function createAgentCommandExecutor(
         ensureResultMatchesIntent(result, intent);
       }
       if (result.kind === 'clarification') {
-        const message = '指令信息不足，已停止执行';
+        if (intent === 'create_diagram') {
+          result = planLocalStructuralDiagram(originalCommand);
+        }
+      }
+      if (result.kind === 'clarification') {
+        const message = '无法确定具体修改目标，已保留当前画布';
         useAgentStore.getState().setStateForTask({
           status: 'error',
           explanation: result.explanation,

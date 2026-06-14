@@ -20,19 +20,40 @@ export function planLocalStructuralDiagram(command: string): AgentPlanResult {
   const diagramType = detectDiagramType(command);
   const topic = extractTopic(command, diagramType);
   const explicitItems = extractExplicitItems(command);
-  const blueprint = createBlueprint(diagramType, topic, explicitItems);
+  const isMinimalFlow = diagramType === 'flowchart' && /最简单|最简/.test(command);
+  const blueprint = isMinimalFlow
+    ? createMinimalFlowBlueprint()
+    : createBlueprint(diagramType, topic, explicitItems);
+  const title = isMinimalFlow ? '最简流程图' : `${topic}${typeLabel(diagramType)}`;
   return normalizeAgentResult({
     kind: 'diagram',
-    title: `${topic}${typeLabel(diagramType)}`,
+    title,
     diagramType,
     direction:
       diagramType === 'organization' || diagramType === 'flowchart'
         ? 'top_down'
         : 'left_to_right',
     ...blueprint,
-    summary: `已按语音生成${topic}${typeLabel(diagramType)}`,
+    summary: `已按语音生成${title}`,
     explanation: '本地结构规划器根据图表类型与语音主题生成。',
   });
+}
+
+function createMinimalFlowBlueprint(): {
+  nodes: BlueprintNode[];
+  edges: BlueprintEdge[];
+} {
+  return blueprint(
+    [
+      ['start', '开始', 'start'],
+      ['action', '执行操作', 'process'],
+      ['end', '结束', 'end'],
+    ],
+    [
+      ['start', 'action'],
+      ['action', 'end'],
+    ],
+  );
 }
 
 export function detectDiagramType(command: string): DiagramType {
@@ -207,7 +228,9 @@ function extractTopic(command: string, type: DiagramType): string {
     .replace(/[，。！？,.!?]/g, '')
     .replace(/的$/, '')
     .trim();
-  return cleaned || defaultTopic(type);
+  return !cleaned || /^(?:最简单|简单|最简|基础|默认|普通)$/.test(cleaned)
+    ? defaultTopic(type)
+    : cleaned;
 }
 
 function extractExplicitItems(command: string): string[] {

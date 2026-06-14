@@ -40,4 +40,18 @@ describe('structuralDiagramPlanner', () => {
       '数据库',
     ]);
   });
+
+  it('creates a minimal default flow for a complete request without details', () => {
+    const result = planLocalStructuralDiagram('生成一个最简单的流程图');
+    expect(result.kind).toBe('diagram');
+    if (result.kind !== 'diagram') return;
+
+    expect(result.diagram.title).toBe('最简流程图');
+    expect(result.diagram.nodes.map((node) => node.label)).toEqual([
+      '开始',
+      '执行操作',
+      '结束',
+    ]);
+    expect(result.diagram.edges).toHaveLength(2);
+  });
 });

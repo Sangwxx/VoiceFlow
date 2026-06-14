@@ -143,6 +143,7 @@ export function createVoiceController({
         },
         onResult: ({ text, isFinal }) => {
           if (!shouldListen) return;
+          useVoiceStore.getState().clearError();
           const calibration = calibrateAsrTranscript(text, {
             diagram: useDiagramStore.getState().diagram,
             recentCommands: useCommandStore

@@ -42,6 +42,32 @@ describe('agentCommandExecutor', () => {
     expect(useAgentStore.getState().status).toBe('error');
   });
 
+  it('fills in a complete creation intent locally when AI asks for clarification', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      kind: 'clarification',
+      question: '请补充具体流程',
+    });
+    const executor = createAgentCommandExecutor(
+      { mode: 'real', model: 'test-model', complete },
+      feedback,
+    );
+
+    await expect(
+      executor.execute('生成一个最简单的流程图', 'create_diagram'),
+    ).resolves.toMatchObject({ status: 'success' });
+
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(useDiagramStore.getState().diagram).toMatchObject({
+      title: '最简流程图',
+      diagramType: 'flowchart',
+    });
+    expect(useDiagramStore.getState().diagram.nodes.map((node) => node.label)).toEqual([
+      '开始',
+      '执行操作',
+      '结束',
+    ]);
+  });
+
   it('cancels in-flight requests without changing the diagram', async () => {
     const originalId = useDiagramStore.getState().diagram.id;
     const provider = {

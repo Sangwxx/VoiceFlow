@@ -34,6 +34,7 @@ export type VoiceStoreState = {
   setCorrectedTranscript: (text: string) => void;
   setCorrectionFeedback: (feedback: CorrectionFeedback | null) => void;
   setError: (error: string | null) => void;
+  clearError: () => void;
   setCommandPaused: (paused: boolean) => void;
   setTaskQueue: (tasks: VoiceTask[]) => void;
   clearInterimTranscript: () => void;
@@ -61,6 +62,11 @@ export const useVoiceStore = create<VoiceStoreState>((set) => ({
       correctedTranscript: correctionFeedback?.correctedText ?? '',
     }),
   setError: (error) => set({ error, status: error ? 'error' : 'idle' }),
+  clearError: () =>
+    set((state) => ({
+      error: null,
+      status: state.status === 'error' ? 'listening' : state.status,
+    })),
   setCommandPaused: (commandPaused) =>
     set({ commandPaused, status: commandPaused ? 'paused' : 'listening' }),
   setTaskQueue: (taskQueue) => set({ taskQueue }),

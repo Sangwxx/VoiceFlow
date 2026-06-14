@@ -91,6 +91,20 @@ describe('voiceController integration', () => {
     });
   });
 
+  it('clears a stale recognition network error when a new result arrives', () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+
+    controller.startListening();
+    provider.emitError(new Error('语音识别网络连接失败。'));
+    expect(useVoiceStore.getState().error).toBe('语音识别网络连接失败。');
+
+    provider.emitInterim('生成一个最简单的流程图');
+
+    expect(useVoiceStore.getState().error).toBeNull();
+    expect(useVoiceStore.getState().interimTranscript).toBe('生成一个最简单的流程图');
+  });
+
   it('executes a complete low-risk interim task while speech continues', async () => {
     const provider = new MockVoiceProvider();
     const controller = createTestController(provider);
