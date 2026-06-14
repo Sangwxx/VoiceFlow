@@ -6,7 +6,7 @@
 - 技术栈：React 19、TypeScript、Vite、Zustand、React Flow、Vitest。
 - Diagram JSON 是唯一绘图数据源；组件不得直接修改 Diagram。
 - 所有变更完成后执行：`npm run typecheck`、`npm run lint`、`npm run format:check`、`npm test`、`npm run build`。
-- GitHub 仓库：`https://github.com/Sangwxx/VoiceFlow`；功能开发使用独立分支并在验证后合并到 `main`。
+- GitHub 仓库：`https://github.com/Sangwxx/VoiceFlow`；验证通过后直接使用中文提交更新 `main`。
 
 ## 产品文档
 

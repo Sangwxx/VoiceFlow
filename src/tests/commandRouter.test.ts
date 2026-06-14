@@ -142,6 +142,18 @@ describe('routeCommand', () => {
       route: 'fast',
       fastCommand: 'export_png',
     });
+    expect(routeCommand('导出这个图表')).toMatchObject({
+      route: 'fast',
+      fastCommand: 'export_png',
+    });
+    expect(routeCommand('把当前图导出为图片')).toMatchObject({
+      route: 'fast',
+      fastCommand: 'export_png',
+    });
+    expect(routeCommand('把当前图导出为 SVG')).toMatchObject({
+      route: 'fast',
+      fastCommand: 'export_svg',
+    });
     expect(routeCommand('聚焦登录页')).toMatchObject({
       route: 'workflow',
       workflowIntent: 'focus_node',

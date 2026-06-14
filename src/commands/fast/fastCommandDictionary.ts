@@ -27,9 +27,28 @@ export const fastCommandDictionary: FastCommandDefinition[] = [
     phrases: ['保存', '保存当前版本'],
     exactOnly: true,
   },
-  { command: 'export_json', phrases: ['导出json', '保存为json'] },
-  { command: 'export_svg', phrases: ['导出svg', '导出矢量图'] },
-  { command: 'export_png', phrases: ['导出png', '导出图片'] },
+  {
+    command: 'export_json',
+    phrases: ['导出json', '保存为json', '导出为json', '导出json文件'],
+  },
+  {
+    command: 'export_svg',
+    phrases: ['导出svg', '导出矢量图', '导出为svg', '保存为svg'],
+  },
+  {
+    command: 'export_png',
+    phrases: [
+      '导出png',
+      '导出图片',
+      '导出为图片',
+      '保存为图片',
+      '导出这个图表',
+      '导出当前图表',
+      '导出这个图',
+      '导出当前图',
+      '导出图表',
+    ],
+  },
 ];
 
 function matchDefinitions(
