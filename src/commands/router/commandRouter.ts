@@ -138,6 +138,18 @@ export function routeCommand(text: string): RouteResult {
     };
   }
 
+  const directVersionWorkflow = normalizedText.match(/^(恢复|回到|对比)(?:版本)?(.+)$/);
+  if (directVersionWorkflow) {
+    return {
+      ...base,
+      route: 'workflow',
+      confidence: 0.98,
+      workflowIntent:
+        directVersionWorkflow[1] === '对比' ? 'compare_version' : 'restore_version',
+      reason: '识别为命名版本操作',
+    };
+  }
+
   const simple = parseSimpleCommand(text);
   if (simple.status === 'ready') {
     return {

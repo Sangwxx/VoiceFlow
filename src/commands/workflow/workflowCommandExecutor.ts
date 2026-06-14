@@ -19,7 +19,7 @@ function extractVersionName(text: string): string {
   return (
     text
       .replace(
-        /^(保存当前版本|保存版本|保存为版本|恢复版本|恢复|回到版本|对比版本|和版本)/,
+        /^(保存当前版本|保存版本|保存为版本|恢复版本|恢复|回到版本|对比版本|对比|和版本)/,
         '',
       )
       .replace(/^(叫|为|到)/, '')

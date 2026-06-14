@@ -124,6 +124,8 @@ describe('competition app', () => {
     await user.click(screen.getByRole('button', { name: '打开工具手册' }));
     expect(screen.getByRole('dialog', { name: '工具手册' })).toBeInTheDocument();
     expect(screen.getByText('增删改图形')).toBeInTheDocument();
+    expect(screen.getAllByText('本地 Fast Path')).toHaveLength(2);
+    expect(screen.getByText('LLM 规划，本地降级')).toBeInTheDocument();
     expect(screen.getByText('“删除物体 3”')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '关闭工具手册' }));
     expect(screen.queryByRole('dialog', { name: '工具手册' })).not.toBeInTheDocument();
