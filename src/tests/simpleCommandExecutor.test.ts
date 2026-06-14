@@ -299,6 +299,24 @@ describe('simpleCommandExecutor', () => {
     ).toBe(true);
   });
 
+  it('executes common irregular insert and connect wording locally', async () => {
+    const executor = createSimpleCommandExecutor(speechFeedback);
+    await executor.execute('把打开 App改名为库存校验');
+    await executor.execute('在库存校验节点后面新增一个节点A');
+    await executor.execute('加一个节点叫B');
+
+    await expect(executor.execute('将节点A指向节点B')).resolves.toMatchObject({
+      status: 'success',
+      intent: 'create_edge',
+    });
+    const diagram = useDiagramStore.getState().diagram;
+    const nodeA = diagram.nodes.find((node) => node.label === 'a');
+    const nodeB = diagram.nodes.find((node) => node.label === 'b');
+    expect(diagram.edges).toContainEqual(
+      expect.objectContaining({ from: nodeA?.id, to: nodeB?.id }),
+    );
+  });
+
   it('does not leave pending clarification after deterministic selection', async () => {
     const executor = createSimpleCommandExecutor(speechFeedback);
     await executor.execute('把失败分支改成红色虚线');

@@ -60,6 +60,8 @@ export function createAgentCommandExecutor(
       clarificationQuestion: '',
       error: null,
       conversation,
+      contextDiagramId: useDiagramStore.getState().diagram.id,
+      contextDiagramTitle: useDiagramStore.getState().diagram.title,
       taskId,
       controller,
     });
@@ -94,7 +96,8 @@ export function createAgentCommandExecutor(
           intent === 'modify_diagram' ? describeDiagramSpatially(diagram) : undefined,
         recentCommands: useCommandStore
           .getState()
-          .executionLog.slice(0, 5)
+          .executionLog.filter((log) => log.diagramId === diagram.id)
+          .slice(0, 5)
           .map((log) => log.rawText),
       };
       const output = await provider.complete(agentRequest, { signal: controller.signal });
@@ -191,6 +194,13 @@ export function createAgentCommandExecutor(
       const state = useAgentStore.getState();
       if (state.status !== 'clarifying' || !state.intent || !state.originalCommand) {
         return Promise.resolve({ status: 'ignored', message: '当前没有等待回答的问题' });
+      }
+      const diagram = useDiagramStore.getState().diagram;
+      if (state.contextDiagramId !== diagram.id) {
+        useAgentStore.getState().clear();
+        const message = '当前画布已经切换，旧对话已结束，请重新描述指令';
+        useCommandStore.getState().setLastMessage(message);
+        return Promise.resolve({ status: 'ignored', message });
       }
       return request(state.originalCommand, state.intent, [
         ...state.conversation,

@@ -33,7 +33,37 @@ function parsePayload(input: unknown): UnknownRecord {
     .trim()
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```$/, '');
-  return record(JSON.parse(cleaned));
+  try {
+    return record(JSON.parse(cleaned));
+  } catch {
+    const extracted = extractJsonObject(cleaned);
+    if (!extracted) throw new Error('AI 输出中没有可执行的 JSON 对象');
+    return record(JSON.parse(extracted));
+  }
+}
+
+function extractJsonObject(text: string): string | null {
+  for (let start = text.indexOf('{'); start >= 0; start = text.indexOf('{', start + 1)) {
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let index = start; index < text.length; index += 1) {
+      const character = text[index];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (character === '\\') escaped = true;
+        else if (character === '"') inString = false;
+        continue;
+      }
+      if (character === '"') inString = true;
+      else if (character === '{') depth += 1;
+      else if (character === '}') {
+        depth -= 1;
+        if (depth === 0) return text.slice(start, index + 1);
+      }
+    }
+  }
+  return null;
 }
 
 function stringValue(value: unknown, fallback: string): string {

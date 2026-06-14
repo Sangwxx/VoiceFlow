@@ -36,6 +36,24 @@ describe('export service', () => {
     expect(download).toHaveBeenCalled();
   });
 
+  it('mounts a browser download link before clicking it', async () => {
+    vi.useFakeTimers();
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => {});
+    const append = vi.spyOn(document.body, 'appendChild');
+    const service = new BrowserExportService();
+
+    await service.export(loginFlowDiagram, 'json');
+
+    expect(append).toHaveBeenCalledWith(expect.any(HTMLAnchorElement));
+    expect(click).toHaveBeenCalledOnce();
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:test');
+    vi.useRealTimers();
+  });
+
   it.each([
     ['svg', 'data:image/svg+xml,test'],
     ['png', 'data:image/png,test'],
@@ -61,6 +79,7 @@ describe('export service', () => {
 
     expect(shouldIncludeInExport(number)).toBe(false);
     expect(shouldIncludeInExport(node)).toBe(true);
+    expect(shouldIncludeInExport({} as HTMLElement)).toBe(true);
     expect(JSON.stringify(loginFlowDiagram)).not.toContain('temporaryNumber');
   });
 });

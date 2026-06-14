@@ -28,14 +28,20 @@ export function safeExportFilename(title: string): string {
 }
 
 export function shouldIncludeInExport(node: HTMLElement): boolean {
-  return node.getAttribute('data-voice-reference') !== 'true';
+  return (
+    typeof node.getAttribute !== 'function' ||
+    node.getAttribute('data-voice-reference') !== 'true'
+  );
 }
 
 function triggerDownload(url: string, filename: string) {
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = filename;
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
   anchor.click();
+  anchor.remove();
 }
 
 export class BrowserExportService implements ExportService {
@@ -74,7 +80,9 @@ export class BrowserExportService implements ExportService {
             );
     }
     (this.dependencies.download ?? triggerDownload)(url, filename);
-    if (format === 'json') URL.revokeObjectURL(url);
+    if (format === 'json') {
+      window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+    }
     return { format, filename, durationMs: Math.round(performance.now() - startedAt) };
   }
 }

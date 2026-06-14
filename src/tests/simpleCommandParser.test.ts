@@ -6,10 +6,12 @@ describe('parseSimpleCommand', () => {
   it.each([
     ['加一个节点叫验证码校验', 'create_node'],
     ['在登录页后面加一个验证码校验节点', 'insert_node_after'],
+    ['在库存校验节点后面新增一个节点A', 'insert_node_after'],
     ['删除验证码校验节点', 'delete_node'],
     ['把登录页改名为账号登录', 'update_node_text'],
     ['把验证码校验改成蓝色', 'update_node_style'],
     ['连接登录页到验证码校验', 'create_edge'],
+    ['将节点A指向节点B', 'create_edge'],
     ['生成一条线', 'create_edge'],
     ['把5号圆形上的文字改成学校', 'update_node_text'],
     ['把1号的开始框中的开始文字改成开始训练', 'update_node_text'],
@@ -48,6 +50,14 @@ describe('parseSimpleCommand', () => {
     expect(parseSimpleCommand('把失败分支改成红色虚线')).toMatchObject({
       status: 'ready',
       draft: { edgeText: '失败', colorName: '红色', lineType: 'dashed' },
+    });
+    expect(parseSimpleCommand('在库存校验节点后面新增一个节点A')).toMatchObject({
+      status: 'ready',
+      draft: { targetText: '库存校验', newLabel: 'a' },
+    });
+    expect(parseSimpleCommand('将节点A指向节点B')).toMatchObject({
+      status: 'ready',
+      draft: { sourceText: 'a', targetText: 'b' },
     });
   });
 

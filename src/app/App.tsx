@@ -64,6 +64,7 @@ export function App() {
   const agentStatus = useAgentStore((state) => state.status);
   const clarificationQuestion = useAgentStore((state) => state.clarificationQuestion);
   const clarificationExplanation = useAgentStore((state) => state.explanation);
+  const contextDiagramTitle = useAgentStore((state) => state.contextDiagramTitle);
   const versions = useVersionStore((state) => state.versions);
   const exceptionPathsHidden = useCanvasViewStore((state) => state.exceptionPathsHidden);
   const controller = useMemo(() => createBrowserVoiceController(), []);
@@ -150,6 +151,7 @@ export function App() {
               </div>
             </div>
             <strong>{clarificationQuestion}</strong>
+            <span>当前对话仅绑定画布：{contextDiagramTitle}</span>
             {clarificationExplanation ? <p>{clarificationExplanation}</p> : null}
             <button type="button" onClick={() => useAgentStore.getState().cancel()}>
               取消本次任务
@@ -168,7 +170,7 @@ export function App() {
           <div className={styles.sectionHeading}>
             <div>
               <span>文字指令测试</span>
-              <small>无法使用语音时，走同一条指令执行链路</small>
+              <small>当前指令仅作用于「{diagram.title}」；切换画布后旧对话自动结束</small>
             </div>
           </div>
           <div className={styles.textCommandControls}>

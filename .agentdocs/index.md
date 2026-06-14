@@ -18,6 +18,7 @@
 
 ## 已完成任务文档
 
+- `workflow/done/260614-export-agent-context-boundaries.md`：真实浏览器导出、Agent JSON 容错和画布级对话上下文边界。
 - `workflow/done/260614-editor-lifecycle-and-viewport.md`：基础绘图指令、未保存画布保护与大型图表视口适配。
 - `workflow/done/260614-precise-layout-editing.md`：明确位置约束、节点移动与可靠二次编辑。
 - `workflow/done/260614-semantic-spatial-operations.md`：语义相对位置、对齐、连线方向和画布空间摘要。
