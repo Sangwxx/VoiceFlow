@@ -26,6 +26,7 @@
 - `workflow/done/260614-final-fragment-merging.md`：合并同一次录音中的多个 final 识别片段，避免完整指令被粉碎。
 - `workflow/done/260614-autonomous-generation-fallback.md`：完整创建指令主动补全、最简流程降级与过时语音错误清理。
 - `workflow/done/260614-agent-clarification-loop.md`：Agent 反问窗口、语音与文字回答续接。
+- `workflow/done/260614-fix-kimi-browser-connection.md`：通过 Vite 同源代理修复 Kimi 浏览器跨域连接。
 - `workflow/done/260614-llm-diagram-generation.md`：完整图表由 LLM 主导生成，基础图形保持本地绘制，并增加文字测试入口。
 - `workflow/done/260613-remove-confirmation-questions.md`：删除系统确认与反问流程，改为确定性选择和校验后直接执行。
 

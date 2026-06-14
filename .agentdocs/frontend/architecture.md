@@ -26,6 +26,7 @@ Web Speech API
 - Diagram 变更统一通过 Operation 或 `diagramStore`，组件只负责渲染。
 - LLM 修改节点空间关系时优先输出 `set_relative_position`、`align_nodes`、`set_edge_endpoints` 等语义 Operation，由本地空间约束求解器计算坐标和连线路由；Agent 请求必须携带可读的画布空间摘要。
 - 外部输入、AI 输出和持久化数据进入业务状态前必须做运行时校验。
+- 本地开发环境中的 Moonshot/Kimi 请求统一通过 Vite `/api/moonshot` 同源代理发送，避免浏览器直接跨域请求导致 `Failed to fetch`。
 - 浏览器能力和持久化能力不可用时，应降级而不是导致主流程崩溃。
 - React Flow 画布通过 `React.lazy` 延迟加载；新增重型首屏模块时应评估独立分包。
 - Fast Path 常用命令不得调用 AI；命令执行日志是延迟指标的唯一数据来源。

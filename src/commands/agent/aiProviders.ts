@@ -36,27 +36,38 @@ export class OpenAiCompatibleProvider implements AiProvider {
   }
 
   async complete(request: AgentRequest, options?: { signal?: AbortSignal }) {
-    const response = await this.fetchImpl(
-      `${this.config.baseUrl.replace(/\/$/, '')}/chat/completions`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.config.apiKey}`,
+    let response: Response;
+    try {
+      response = await this.fetchImpl(
+        `${resolveRequestBaseUrl(this.config.baseUrl)}/chat/completions`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.config.apiKey}`,
+          },
+          body: JSON.stringify({
+            model: this.config.model,
+            messages: [{ role: 'user', content: buildAgentPrompt(request) }],
+            ...(this.config.baseUrl.includes('moonshot.cn')
+              ? {
+                  response_format: { type: 'json_object' },
+                  thinking: { type: 'disabled' },
+                }
+              : {}),
+          }),
+          signal: options?.signal,
         },
-        body: JSON.stringify({
-          model: this.config.model,
-          messages: [{ role: 'user', content: buildAgentPrompt(request) }],
-          ...(this.config.baseUrl.includes('moonshot.cn')
-            ? {
-                response_format: { type: 'json_object' },
-                thinking: { type: 'disabled' },
-              }
-            : {}),
-        }),
-        signal: options?.signal,
-      },
-    );
+      );
+    } catch (error) {
+      if (error instanceof TypeError) {
+        throw new Error(
+          'AI 网络连接失败。若使用 Kimi，请通过 npm run dev 启动本地代理，并检查网络连接。',
+          { cause: error },
+        );
+      }
+      throw error;
+    }
 
     if (!response.ok) {
       const detail = await readErrorDetail(response);
@@ -71,6 +82,18 @@ export class OpenAiCompatibleProvider implements AiProvider {
     if (typeof content !== 'string') throw new Error('AI 响应缺少文本内容');
     return content;
   }
+}
+
+function resolveRequestBaseUrl(baseUrl: string): string {
+  const normalized = baseUrl.replace(/\/$/, '');
+  if (
+    normalized === 'https://api.moonshot.cn/v1' &&
+    typeof window !== 'undefined' &&
+    ['localhost', '127.0.0.1'].includes(window.location.hostname)
+  ) {
+    return '/api/moonshot/v1';
+  }
+  return normalized;
 }
 
 async function readErrorDetail(response: Response): Promise<string> {
