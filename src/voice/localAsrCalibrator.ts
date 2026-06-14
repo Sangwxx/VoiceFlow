@@ -44,6 +44,7 @@ export function calibrateAsrTranscript(
     corrected = next;
   }
 
+  corrected = applyCommandSlotCorrections(corrected, context.diagram, reasons);
   const entries = buildDynamicLexicon(context);
   corrected = applyBestCandidates(corrected, entries, reasons);
 
@@ -55,6 +56,71 @@ export function calibrateAsrTranscript(
     reason: changed ? [...new Set(reasons)].join(' + ') : '无需校准',
     changed,
   };
+}
+
+function applyCommandSlotCorrections(
+  text: string,
+  diagram: Diagram,
+  reasons: string[],
+): string {
+  const slots = extractNodeTargetSlots(text);
+  let result = text;
+  for (const slot of slots.sort((left, right) => right.start - left.start)) {
+    const replacement = uniquePhoneticNodeMatch(slot.value, diagram);
+    if (!replacement || replacement === slot.value) continue;
+    result = `${result.slice(0, slot.start)}${replacement}${result.slice(slot.end)}`;
+    reasons.push('命令槽位上下文');
+  }
+  return result;
+}
+
+function extractNodeTargetSlots(text: string): Array<{
+  start: number;
+  end: number;
+  value: string;
+}> {
+  const patterns = [
+    /(?:把|将)(.+?)(?=(?:中的|里的|上的).*?文字(?:改成|改为|设为))/g,
+    /(?:把|将)(.+?)(?=(?:改名为|重命名为|移动到|移到|放到|挪到|放大|缩小))/g,
+    /删除(.+?)(?=(?:流程)?节点|$)/g,
+    /连接(.+?)到/g,
+    /到(.+?)(?=(?:标签为)?$)/g,
+  ];
+  const slots: Array<{ start: number; end: number; value: string }> = [];
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      const value = match[1]?.trim();
+      if (!value) continue;
+      const offset = match[0].indexOf(match[1]);
+      const start = (match.index ?? 0) + offset;
+      slots.push({ start, end: start + match[1].length, value });
+    }
+  }
+  return slots.filter(
+    (slot, index) =>
+      !slots.some(
+        (other, otherIndex) =>
+          otherIndex < index && other.start === slot.start && other.end === slot.end,
+      ),
+  );
+}
+
+function uniquePhoneticNodeMatch(value: string, diagram: Diagram): string | undefined {
+  const normalized = normalizeText(value)
+    .replace(/^(?:一个|这个|那个)/, '')
+    .replace(/(?:流程)?节点$/, '');
+  if (normalized.length < 2) return undefined;
+  const sourcePinyin = fullPinyinKey(normalized);
+  const matches = diagram.nodes
+    .map((node) => node.label)
+    .filter((label) => {
+      const target = normalizeText(label);
+      return (
+        target !== normalized &&
+        (fullPinyinKey(target) === sourcePinyin || similarity(normalized, target) >= 0.92)
+      );
+    });
+  return matches.length === 1 ? matches[0] : undefined;
 }
 
 export function buildDynamicLexicon(context: {
@@ -193,6 +259,7 @@ function overlaps(left: Candidate, right: Candidate): boolean {
 function confidenceFromReasons(reasons: string[]): number {
   if (reasons.includes('高精度错词映射')) return 0.98;
   if (reasons.includes('命令别名归一化')) return 0.96;
+  if (reasons.includes('命令槽位上下文')) return 0.96;
   if (reasons.includes('当前画布上下文')) return 0.93;
   return 0.9;
 }

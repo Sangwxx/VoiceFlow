@@ -120,6 +120,19 @@ describe('voiceController integration', () => {
     expect(useVoiceStore.getState().correctedTranscript).toBe('横向布局，然后我继续说');
   });
 
+  it('corrects a homophone node target before executing a voice rename', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+    await controller.handleFinalTranscript('画一个圆形和正方形');
+
+    await controller.handleFinalTranscript('把原型上的文字改成学校');
+
+    expect(useVoiceStore.getState().correctedTranscript).toBe('把圆形上的文字改成学校');
+    expect(
+      useDiagramStore.getState().diagram.nodes.find((node) => node.label === '学校'),
+    ).toBeDefined();
+  });
+
   it('keeps strict order when a complex task precedes an immediate task', async () => {
     const provider = new MockVoiceProvider();
     const controller = createTestController(provider);

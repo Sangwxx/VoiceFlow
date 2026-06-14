@@ -52,6 +52,50 @@ describe('localAsrCalibrator', () => {
     ).toBe('删除进入登录页');
   });
 
+  it('uses the command target slot to resolve a protected homophone from canvas context', () => {
+    const diagram = structuredClone(loginFlowDiagram);
+    diagram.nodes = [
+      { id: 'circle', label: '圆形', type: 'process' },
+      { id: 'square', label: '正方形', type: 'process' },
+    ];
+
+    expect(calibrateAsrTranscript('把原型上的文字改成学校', { diagram })).toMatchObject({
+      correctedText: '把圆形上的文字改成学校',
+      confidence: 0.96,
+      reason: expect.stringContaining('命令槽位上下文'),
+    });
+    expect(
+      calibrateAsrTranscript('把原型上的文字改成社会', { diagram }).correctedText,
+    ).toBe('把圆形上的文字改成社会');
+  });
+
+  it('corrects homophone targets in delete and connection command slots', () => {
+    const diagram = structuredClone(loginFlowDiagram);
+    diagram.nodes = [
+      { id: 'circle', label: '圆形', type: 'process' },
+      { id: 'square', label: '正方形', type: 'process' },
+    ];
+
+    expect(calibrateAsrTranscript('删除原型节点', { diagram }).correctedText).toBe(
+      '删除圆形节点',
+    );
+    expect(calibrateAsrTranscript('连接原型到正方形', { diagram }).correctedText).toBe(
+      '连接圆形到正方形',
+    );
+  });
+
+  it('does not guess when multiple canvas nodes share the same pronunciation', () => {
+    const diagram = structuredClone(loginFlowDiagram);
+    diagram.nodes = [
+      { id: 'circle', label: '圆形', type: 'process' },
+      { id: 'prototype', label: '原型', type: 'process' },
+    ];
+
+    expect(
+      calibrateAsrTranscript('把园型上的文字改成学校', { diagram }).correctedText,
+    ).toBe('把园型上的文字改成学校');
+  });
+
   it('leaves unrelated speech unchanged', () => {
     expect(
       calibrateAsrTranscript('今天天气怎么样', { diagram: loginFlowDiagram }),
