@@ -4,6 +4,7 @@ import { createAgentCommandExecutor } from '../commands/agent/agentCommandExecut
 import type { AiProvider } from '../commands/agent/agentTypes';
 import type { SpeechFeedbackService } from '../services/speechFeedbackService';
 import { useAgentStore } from '../stores/agentStore';
+import { useCommandStore } from '../stores/commandStore';
 import { useDiagramStore } from '../stores/diagramStore';
 import { useVersionStore } from '../stores/versionStore';
 
@@ -15,6 +16,7 @@ const feedback: SpeechFeedbackService = {
 describe('agentCommandExecutor', () => {
   beforeEach(() => {
     useAgentStore.getState().clear();
+    useCommandStore.getState().reset();
     useDiagramStore.getState().reset();
     useVersionStore.getState().clear();
   });
@@ -43,12 +45,39 @@ describe('agentCommandExecutor', () => {
       status: 'clarifying',
       clarificationQuestion: '请补充具体流程',
       originalCommand: '把当前图整理清楚',
+      contextDiagramId: useDiagramStore.getState().diagram.id,
+      contextDiagramTitle: useDiagramStore.getState().diagram.title,
     });
 
     await expect(executor.answerClarification('改成横向布局')).resolves.toMatchObject({
       status: 'success',
     });
     expect(useDiagramStore.getState().diagram.layout.direction).toBe('left_to_right');
+    expect(useAgentStore.getState().status).toBe('idle');
+  });
+
+  it('ends an old clarification when the active diagram changes', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      kind: 'clarification',
+      question: '请补充具体流程',
+    });
+    const executor = createAgentCommandExecutor(
+      { mode: 'real', model: 'test-model', complete },
+      feedback,
+    );
+    await executor.execute('把当前图整理清楚', 'modify_diagram');
+    const nextDiagram = {
+      ...useDiagramStore.getState().diagram,
+      id: 'another-diagram',
+      title: '另一张图',
+    };
+    useDiagramStore.getState().replaceDiagram(nextDiagram, '切换画布');
+
+    await expect(executor.answerClarification('改成横向布局')).resolves.toMatchObject({
+      status: 'ignored',
+      message: '当前画布已经切换，旧对话已结束，请重新描述指令',
+    });
+    expect(complete).toHaveBeenCalledOnce();
     expect(useAgentStore.getState().status).toBe('idle');
   });
 
@@ -213,6 +242,47 @@ describe('agentCommandExecutor', () => {
         spatialSummary: expect.stringContaining('节点空间关系'),
       }),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it('only sends recent commands that belong to the active diagram', async () => {
+    const diagramId = useDiagramStore.getState().diagram.id;
+    const baseLog = {
+      id: 'log',
+      normalizedText: '命令',
+      route: 'simple' as const,
+      confidence: 0.9,
+      status: 'success' as const,
+      message: '完成',
+      durationMs: 1,
+      timestamp: new Date().toISOString(),
+    };
+    useCommandStore.getState().addExecutionLog({
+      ...baseLog,
+      id: 'old',
+      rawText: '旧画布命令',
+      diagramId: 'old-diagram',
+    });
+    useCommandStore.getState().addExecutionLog({
+      ...baseLog,
+      id: 'current',
+      rawText: '当前画布命令',
+      diagramId,
+    });
+    const complete = vi.fn().mockResolvedValue({
+      kind: 'operations',
+      operations: [{ type: 'apply_layout', direction: 'left_to_right' }],
+    });
+    const executor = createAgentCommandExecutor(
+      { mode: 'real', model: 'test-model', complete },
+      feedback,
+    );
+
+    await executor.execute('整理当前图', 'modify_diagram');
+
+    expect(complete).toHaveBeenCalledWith(
+      expect.objectContaining({ recentCommands: ['当前画布命令'] }),
+      expect.anything(),
     );
   });
 

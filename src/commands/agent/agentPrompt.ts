@@ -8,7 +8,7 @@ export function buildAgentPrompt(request: AgentRequest): string {
   const isModification = request.intent === 'modify_diagram';
   return [
     '你是专业图表架构师。你的主要任务是根据用户主题规划准确、完整且有针对性的结构图，而不是套用固定模板。',
-    '只返回紧凑 JSON，不要 Markdown。生成完整图时不要输出坐标、样式、元数据或内部完整 Diagram；修改位置时优先输出语义空间 Operation，不要自行计算像素坐标。',
+    '回复必须以 { 开始并以 } 结束，只返回一个紧凑 JSON 对象，不要 Markdown、解释前缀或解释后缀。生成完整图时不要输出坐标、样式、元数据或内部完整 Diagram；修改位置时优先输出语义空间 Operation，不要自行计算像素坐标。',
     isModification
       ? '修改现有图表时返回：{"kind":"operations","explanation":"...","summary":"...","operations":[...]}。'
       : '生成图表时返回：{"kind":"diagram","title":"...","diagramType":"...","direction":"top_down|left_to_right","nodes":[{"id":"n1","label":"...","type":"..."}],"edges":[{"from":"n1","to":"n2","label":"可选"}],"groups":[{"label":"可选","nodeIds":["n1"]}],"summary":"..."}。',
@@ -33,9 +33,9 @@ export function buildAgentPrompt(request: AgentRequest): string {
       : '',
     request.spatialSummary ? `当前画布空间摘要：\n${request.spatialSummary}` : '',
     request.recentCommands?.length
-      ? `最近命令：${request.recentCommands.join('；')}`
+      ? `当前画布的最近命令：${request.recentCommands.join('；')}`
       : '',
-    context ? `澄清上下文：\n${context}` : '',
+    context ? `仅属于当前画布的澄清上下文：\n${context}` : '',
   ]
     .filter(Boolean)
     .join('\n');

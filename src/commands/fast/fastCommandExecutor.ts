@@ -192,6 +192,7 @@ export function createExecutionLog(
     message: result.message,
     durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
     timestamp,
+    diagramId: useDiagramStore.getState().diagram.id,
     simpleIntent: result.simpleIntent ?? result.intent,
     operationType: result.operation?.type,
   };

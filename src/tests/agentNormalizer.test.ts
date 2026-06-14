@@ -33,6 +33,22 @@ describe('normalizeAgentResult', () => {
     expect(result.diagram.groups).toEqual([]);
   });
 
+  it('extracts a valid JSON object from model explanation text', () => {
+    const result = normalizeAgentResult(
+      `我会执行以下修改：
+      {"kind":"operations","operations":[{"type":"apply_layout","direction":"left_to_right"}]}
+      以上是执行计划。`,
+      loginFlowDiagram,
+    );
+
+    expect(result.kind).toBe('operations');
+    if (result.kind !== 'operations') return;
+    expect(result.operations[0]).toMatchObject({
+      type: 'apply_layout',
+      direction: 'left_to_right',
+    });
+  });
+
   it('rejects invalid edge references', () => {
     expect(() =>
       normalizeAgentResult({

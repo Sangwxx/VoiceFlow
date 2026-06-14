@@ -20,6 +20,7 @@ export type CommandExecutionLog = {
   message: string;
   durationMs: number;
   timestamp: string;
+  diagramId: string;
   simpleIntent?: SimpleIntentName;
   operationType?: DiagramOperation['type'];
 };

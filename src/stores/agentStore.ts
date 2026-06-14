@@ -14,6 +14,8 @@ export type AgentStoreState = {
   originalCommand: string;
   intent: AgentIntent | null;
   conversation: AgentConversationTurn[];
+  contextDiagramId: string;
+  contextDiagramTitle: string;
   previewDiagram: Diagram | null;
   explanation: string;
   summary: string;
@@ -33,6 +35,8 @@ const initial = {
   originalCommand: '',
   intent: null,
   conversation: [],
+  contextDiagramId: '',
+  contextDiagramTitle: '',
   previewDiagram: null,
   explanation: '',
   summary: '',

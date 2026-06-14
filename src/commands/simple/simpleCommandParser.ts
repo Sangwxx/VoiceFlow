@@ -138,7 +138,7 @@ function parseCreateShape(text: string): SimpleOperationDraft | null {
 }
 
 function parseInsertNode(text: string): SimpleOperationDraft | null {
-  const match = text.match(/^在(.+?)后面(?:加|添加|插入)(?:一个)?(.+)$/);
+  const match = text.match(/^在(.+?)后面(?:加|添加|新增|插入)(?:一个)?(.+)$/);
   if (!match) return null;
   const targetText = cleanNodeText(match[1]);
   const newLabel = cleanNodeText(match[2]);
@@ -190,7 +190,10 @@ function parseDeleteEdge(text: string): SimpleOperationDraft | null {
 }
 
 function parseCreateEdge(text: string): SimpleOperationDraft | null {
-  const match = text.match(/^连接(.+?)到(.+?)(?:标签为(.+))?$/);
+  if (text.startsWith('箭头')) return null;
+  const match = text.match(
+    /^(?:连接)?(?:把|将)?(.+?)(?:连接到|连到|指向|到)(.+?)(?:标签为(.+))?$/,
+  );
   if (!match) return null;
   return {
     intent: 'create_edge',
@@ -270,7 +273,7 @@ function inferNodeType(text: string): NodeType {
 
 function cleanNodeText(text: string): string {
   return text
-    .replace(/^(?:一个|这个|那个)/, '')
+    .replace(/^(?:一个|这个|那个|节点)/, '')
     .replace(/(?:流程)?节点$/, '')
     .trim();
 }
