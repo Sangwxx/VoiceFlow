@@ -507,6 +507,41 @@ describe('voiceController integration', () => {
     expect(useDiagramStore.getState().diagram.id).toBe('login-flow');
   });
 
+  it('uses the configured AI only for unpreset free drawing requests', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      title: '自由画布：太阳',
+      groupLabel: '太阳',
+      objects: [
+        {
+          type: 'circle',
+          label: '太阳主体',
+          cx: 500,
+          cy: 350,
+          radius: 100,
+          fill: '#facc15',
+        },
+      ],
+    });
+    const controller = createVoiceController({
+      provider: new MockVoiceProvider(),
+      speechFeedback,
+      aiProvider: { mode: 'real', model: 'test-model', complete },
+    });
+    useWorkspaceModeStore.getState().setMode('free_drawing');
+
+    await expect(controller.handleFinalTranscript('画一个太阳')).resolves.toMatchObject({
+      status: 'success',
+    });
+    expect(complete).toHaveBeenCalledWith(
+      expect.objectContaining({ intent: 'free_drawing', originalCommand: '画一个太阳' }),
+    );
+    expect(
+      useFreeDrawingStore
+        .getState()
+        .scene.objects.some((object) => object.groupLabel === '太阳'),
+    ).toBe(true);
+  });
+
   it('switches workspace modes through high-priority local voice commands', async () => {
     const complete = vi.fn();
     const controller = createVoiceController({

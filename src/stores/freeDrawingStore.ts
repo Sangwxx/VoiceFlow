@@ -19,6 +19,7 @@ function createEmptyScene(): FreeDrawingScene {
 type FreeDrawingStore = {
   scene: FreeDrawingScene;
   addObjects: (objects: FreeDrawingObject[], title: string) => void;
+  removeLatestGroupByLabel: (label: string) => boolean;
   clear: () => void;
   reset: () => void;
 };
@@ -34,6 +35,34 @@ export const useFreeDrawingStore = create<FreeDrawingStore>((set) => ({
         updatedAt: new Date().toISOString(),
       },
     })),
+  removeLatestGroupByLabel: (label) => {
+    let removed = false;
+    set((state) => {
+      const target = [...state.scene.objects]
+        .reverse()
+        .find(
+          (object) =>
+            object.groupLabel?.includes(label) ||
+            (object.groupLabel ? label.includes(object.groupLabel) : false) ||
+            object.label.includes(label),
+        );
+      if (!target) return state;
+      const groupId = target.groupId ?? target.id;
+      const objects = state.scene.objects.filter(
+        (object) => (object.groupId ?? object.id) !== groupId,
+      );
+      removed = objects.length !== state.scene.objects.length;
+      return {
+        scene: {
+          ...state.scene,
+          title: objects.length ? state.scene.title : '自由画布',
+          objects,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+    });
+    return removed;
+  },
   clear: () =>
     set((state) => ({
       scene: {

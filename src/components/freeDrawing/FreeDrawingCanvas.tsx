@@ -34,7 +34,7 @@ export function FreeDrawingCanvas() {
           scene.objects.map(renderObject)
         ) : (
           <text className={styles.emptyText} x="500" y="350">
-            试着说：“画一朵粉色的花”或“画一个蓝色杯子”
+            试着说：“画一只小猫”或“画一朵粉色的花”
           </text>
         )}
       </svg>

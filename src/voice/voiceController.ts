@@ -50,7 +50,7 @@ export function createVoiceController({
   const simpleExecutor = createSimpleCommandExecutor(executionFeedback);
   const agentExecutor = createAgentCommandExecutor(aiProvider, executionFeedback);
   const workflowExecutor = createWorkflowCommandExecutor(executionFeedback);
-  const freeDrawingExecutor = createFreeDrawingExecutor(executionFeedback);
+  const freeDrawingExecutor = createFreeDrawingExecutor(aiProvider, executionFeedback);
 
   function publishTasks(): void {
     useVoiceStore.getState().setTaskQueue([...tasks]);
@@ -250,7 +250,7 @@ export function createVoiceController({
       } else if (useVoiceStore.getState().commandPaused) {
         result = { status: 'ignored', message: '命令执行已暂停，请说继续或取消' };
       } else if (freeDrawingMode) {
-        result = freeDrawingExecutor.execute(executionText);
+        result = await freeDrawingExecutor.execute(executionText);
       } else if (route.route === 'simple') {
         result = await simpleExecutor.execute(executionText);
       } else if (route.route === 'workflow' && route.workflowIntent) {
