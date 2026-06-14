@@ -17,6 +17,8 @@ import { createWorkflowCommandExecutor } from '../commands/workflow/workflowComm
 import { useDiagramStore } from '../stores/diagramStore';
 import { VoiceTaskSegmenter, type VoiceTask } from './voiceTaskSegmenter';
 import { calibrateAsrTranscript } from './localAsrCalibrator';
+import { createFreeDrawingExecutor } from '../commands/freeDrawing/freeDrawingExecutor';
+import { useWorkspaceModeStore } from '../stores/workspaceModeStore';
 
 export type VoiceControllerDependencies = {
   provider: VoiceProvider;
@@ -48,6 +50,7 @@ export function createVoiceController({
   const simpleExecutor = createSimpleCommandExecutor(executionFeedback);
   const agentExecutor = createAgentCommandExecutor(aiProvider, executionFeedback);
   const workflowExecutor = createWorkflowCommandExecutor(executionFeedback);
+  const freeDrawingExecutor = createFreeDrawingExecutor(executionFeedback);
 
   function publishTasks(): void {
     useVoiceStore.getState().setTaskQueue([...tasks]);
@@ -228,6 +231,16 @@ export function createVoiceController({
           reason: '规则未命中，交由上下文 Agent 判断并澄清',
         };
       }
+      const freeDrawingMode = useWorkspaceModeStore.getState().mode === 'free_drawing';
+      if (freeDrawingMode && route.route !== 'fast') {
+        route = {
+          ...route,
+          route: 'simple',
+          agentIntent: undefined,
+          workflowIntent: undefined,
+          reason: '自由画图模式使用本地 SVG 绘图工具',
+        };
+      }
       useCommandStore.getState().setRouteResult(route);
       useVoiceStore.getState().setStatus('processing');
 
@@ -236,6 +249,8 @@ export function createVoiceController({
         result = await executeFastCommand(route.fastCommand);
       } else if (useVoiceStore.getState().commandPaused) {
         result = { status: 'ignored', message: '命令执行已暂停，请说继续或取消' };
+      } else if (freeDrawingMode) {
+        result = freeDrawingExecutor.execute(executionText);
       } else if (route.route === 'simple') {
         result = await simpleExecutor.execute(executionText);
       } else if (route.route === 'workflow' && route.workflowIntent) {

@@ -36,6 +36,24 @@ describe('export service', () => {
     expect(download).toHaveBeenCalled();
   });
 
+  it('exports the active free drawing document with its own title', async () => {
+    const download = vi.fn();
+    const service = new BrowserExportService({ download });
+    const result = await service.export(
+      {
+        id: 'free-scene',
+        title: '花朵与杯子',
+        width: 1000,
+        height: 700,
+        objects: [],
+        updatedAt: new Date().toISOString(),
+      },
+      'json',
+    );
+
+    expect(result.filename).toContain('花朵与杯子');
+  });
+
   it('mounts a browser download link before clicking it', async () => {
     vi.useFakeTimers();
     const click = vi

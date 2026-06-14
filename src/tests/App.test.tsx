@@ -8,6 +8,8 @@ import { useDiagramStore } from '../stores/diagramStore';
 import { useVersionStore } from '../stores/versionStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import { useAgentStore } from '../stores/agentStore';
+import { useFreeDrawingStore } from '../stores/freeDrawingStore';
+import { useWorkspaceModeStore } from '../stores/workspaceModeStore';
 
 describe('competition app', () => {
   beforeEach(() => {
@@ -16,6 +18,8 @@ describe('competition app', () => {
     useCommandStore.getState().reset();
     useVersionStore.getState().clear();
     useAgentStore.getState().clear();
+    useFreeDrawingStore.getState().reset();
+    useWorkspaceModeStore.getState().setMode('diagram');
   });
 
   afterEach(() => useVoiceStore.getState().reset());
@@ -43,6 +47,27 @@ describe('competition app', () => {
       kind: 'manual',
       sourceAction: 'manual_button',
     });
+  });
+
+  it('switches between professional diagrams and the independent free drawing canvas', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: '自由画图' }));
+    expect(screen.getByRole('button', { name: '自由画图' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByLabelText('自由画布自由画布')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('例如：画一朵粉色的花')).toBeInTheDocument();
+
+    await user.type(screen.getByRole('textbox', { name: '输入测试指令' }), '画一朵花');
+    await user.click(screen.getByRole('button', { name: '执行指令' }));
+    expect(screen.getByLabelText('花心')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '专业图表' }));
+    expect(screen.getByText('用户登录流程')).toBeInTheDocument();
+    expect(useDiagramStore.getState().diagram.id).toBe('login-flow');
   });
 
   it('executes typed commands through the voice command controller', async () => {

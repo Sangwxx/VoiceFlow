@@ -3,12 +3,14 @@ import { toPng, toSvg } from 'html-to-image';
 import { getCanvasElement } from '../../services/canvasElementService';
 import { getCanvasViewportApi } from '../../services/canvasViewportService';
 import type { Diagram } from '../diagram/diagramTypes';
+import type { FreeDrawingScene } from '../freeDrawing/freeDrawingTypes';
 
 export type ExportFormat = 'json' | 'svg' | 'png';
 export type ExportResult = { format: ExportFormat; filename: string; durationMs: number };
+export type ExportDocument = Diagram | FreeDrawingScene;
 
 export interface ExportService {
-  export(diagram: Diagram, format: ExportFormat): Promise<ExportResult>;
+  export(document: ExportDocument, format: ExportFormat): Promise<ExportResult>;
 }
 
 export type ExportDependencies = {
@@ -47,14 +49,14 @@ function triggerDownload(url: string, filename: string) {
 export class BrowserExportService implements ExportService {
   constructor(private readonly dependencies: ExportDependencies = {}) {}
 
-  async export(diagram: Diagram, format: ExportFormat): Promise<ExportResult> {
+  async export(document: ExportDocument, format: ExportFormat): Promise<ExportResult> {
     const startedAt = performance.now();
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `voiceflow-${safeExportFilename(diagram.title)}-${stamp}.${format}`;
+    const filename = `voiceflow-${safeExportFilename(document.title)}-${stamp}.${format}`;
     let url: string;
     if (format === 'json') {
       url = URL.createObjectURL(
-        new Blob([JSON.stringify(diagram, null, 2)], { type: 'application/json' }),
+        new Blob([JSON.stringify(document, null, 2)], { type: 'application/json' }),
       );
     } else {
       const viewport = getCanvasViewportApi();

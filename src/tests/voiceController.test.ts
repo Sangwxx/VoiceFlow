@@ -12,6 +12,8 @@ import { useWorkflowStore } from '../stores/workflowStore';
 import { useCanvasViewStore } from '../stores/canvasViewStore';
 import { UnconfiguredAiProvider } from '../commands/agent/aiProviders';
 import { useAgentStore } from '../stores/agentStore';
+import { useFreeDrawingStore } from '../stores/freeDrawingStore';
+import { useWorkspaceModeStore } from '../stores/workspaceModeStore';
 
 const speechFeedback: SpeechFeedbackService = {
   isSupported: () => true,
@@ -57,6 +59,8 @@ describe('voiceController integration', () => {
     useWorkflowStore.getState().clear();
     useCanvasViewStore.getState().reset();
     useAgentStore.getState().clear();
+    useFreeDrawingStore.getState().reset();
+    useWorkspaceModeStore.getState().setMode('diagram');
     vi.clearAllMocks();
   });
 
@@ -477,6 +481,30 @@ describe('voiceController integration', () => {
       route: 'fast',
       rawText: '撤销',
     });
+  });
+
+  it('draws locally in free drawing mode without calling the diagram Agent', async () => {
+    const complete = vi.fn();
+    const controller = createVoiceController({
+      provider: new MockVoiceProvider(),
+      speechFeedback,
+      aiProvider: { mode: 'real', model: 'test-model', complete },
+    });
+    useWorkspaceModeStore.getState().setMode('free_drawing');
+
+    await expect(
+      controller.handleFinalTranscript('画一个蓝色杯子'),
+    ).resolves.toMatchObject({
+      status: 'success',
+    });
+
+    expect(complete).not.toHaveBeenCalled();
+    expect(
+      useFreeDrawingStore
+        .getState()
+        .scene.objects.some((object) => object.label === '杯把'),
+    ).toBe(true);
+    expect(useDiagramStore.getState().diagram.id).toBe('login-flow');
   });
 
   it('sends unmatched speech to a real contextual Agent with the current diagram', async () => {

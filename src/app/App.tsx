@@ -16,6 +16,9 @@ import type { VoiceTask } from '../voice/voiceTaskSegmenter';
 import type { VoiceController } from '../voice/voiceTypes';
 import { WebSpeechProvider } from '../voice/webSpeechProvider';
 import { saveCurrentDiagramVersion } from '../services/diagramVersionService';
+import { FreeDrawingCanvas } from '../components/freeDrawing/FreeDrawingCanvas';
+import { useFreeDrawingStore } from '../stores/freeDrawingStore';
+import { useWorkspaceModeStore, type WorkspaceMode } from '../stores/workspaceModeStore';
 import styles from './App.module.css';
 
 const FlowRenderer = lazy(() =>
@@ -52,6 +55,8 @@ export function App() {
   const [textCommand, setTextCommand] = useState('');
   const [textCommandPending, setTextCommandPending] = useState(false);
   const diagram = useDiagramStore((state) => state.diagram);
+  const freeDrawingScene = useFreeDrawingStore((state) => state.scene);
+  const workspaceMode = useWorkspaceModeStore((state) => state.mode);
   const voiceStatus = useVoiceStore((state) => state.status);
   const interimTranscript = useVoiceStore((state) => state.interimTranscript);
   const finalTranscript = useVoiceStore((state) => state.finalTranscript);
@@ -89,6 +94,18 @@ export function App() {
   }, [currentTask?.id, currentTask?.status]);
 
   const visibleDiagram = exceptionPathsHidden ? hideExceptionPaths(diagram) : diagram;
+  const activeTitle =
+    workspaceMode === 'diagram' ? visibleDiagram.title : freeDrawingScene.title;
+
+  function switchWorkspaceMode(mode: WorkspaceMode): void {
+    useAgentStore.getState().clear();
+    useCommandStore
+      .getState()
+      .setLastMessage(
+        mode === 'diagram' ? '已切换到专业图表模式' : '已切换到自由画图模式',
+      );
+    useWorkspaceModeStore.getState().setMode(mode);
+  }
 
   async function submitTextCommand(): Promise<void> {
     const command = textCommand.trim();
@@ -170,7 +187,7 @@ export function App() {
           <div className={styles.sectionHeading}>
             <div>
               <span>文字指令测试</span>
-              <small>当前指令仅作用于「{diagram.title}」；切换画布后旧对话自动结束</small>
+              <small>当前指令仅作用于「{activeTitle}」；切换模式后旧对话自动结束</small>
             </div>
           </div>
           <div className={styles.textCommandControls}>
@@ -179,7 +196,9 @@ export function App() {
               placeholder={
                 awaitingAgentAnswer
                   ? '输入对 AI 反问的回答'
-                  : '例如：画一个学生选课用例图'
+                  : workspaceMode === 'diagram'
+                    ? '例如：画一个学生选课用例图'
+                    : '例如：画一朵粉色的花'
               }
               value={textCommand}
               onChange={(event) => setTextCommand(event.target.value)}
@@ -261,16 +280,36 @@ export function App() {
         <header className={styles.canvasHeader}>
           <div>
             <span className={styles.eyebrow}>CANVAS</span>
-            <h2>{visibleDiagram.title}</h2>
+            <h2>{activeTitle}</h2>
           </div>
-          <span className={styles.readOnlyBadge}>只读画布</span>
-          <button
-            className={styles.manualButton}
-            type="button"
-            onClick={() => saveCurrentDiagramVersion('manual_button')}
-          >
-            保存当前图
-          </button>
+          <div className={styles.modeSwitch} aria-label="画布模式">
+            <button
+              type="button"
+              aria-pressed={workspaceMode === 'diagram'}
+              onClick={() => switchWorkspaceMode('diagram')}
+            >
+              专业图表
+            </button>
+            <button
+              type="button"
+              aria-pressed={workspaceMode === 'free_drawing'}
+              onClick={() => switchWorkspaceMode('free_drawing')}
+            >
+              自由画图
+            </button>
+          </div>
+          <span className={styles.readOnlyBadge}>
+            {workspaceMode === 'diagram' ? '只读画布' : 'SVG 自由画布'}
+          </span>
+          {workspaceMode === 'diagram' ? (
+            <button
+              className={styles.manualButton}
+              type="button"
+              onClick={() => saveCurrentDiagramVersion('manual_button')}
+            >
+              保存当前图
+            </button>
+          ) : null}
           <button
             className={styles.manualButton}
             type="button"
@@ -280,11 +319,17 @@ export function App() {
             工具手册
           </button>
         </header>
-        <CanvasErrorBoundary diagramId={visibleDiagram.id}>
-          <Suspense fallback={<div className={styles.canvasLoading}>正在加载画布…</div>}>
-            <FlowRenderer ref={registerCanvasViewportApi} diagram={visibleDiagram} />
-          </Suspense>
-        </CanvasErrorBoundary>
+        {workspaceMode === 'diagram' ? (
+          <CanvasErrorBoundary diagramId={visibleDiagram.id}>
+            <Suspense
+              fallback={<div className={styles.canvasLoading}>正在加载画布…</div>}
+            >
+              <FlowRenderer ref={registerCanvasViewportApi} diagram={visibleDiagram} />
+            </Suspense>
+          </CanvasErrorBoundary>
+        ) : (
+          <FreeDrawingCanvas />
+        )}
       </section>
       {manualOpen ? <ToolManual onClose={() => setManualOpen(false)} /> : null}
     </main>

@@ -20,6 +20,7 @@ Web Speech API
 - `versionStore`：命名版本和自动快照，持久化到 `localStorage`。
 - `voiceStore`、`commandStore`、`agentStore`、`workflowStore`：语音命令生命周期。
 - `canvasViewStore`：聚焦、异常分支显示等非持久视图状态。
+- `workspaceModeStore`：专业图表与自由画图模式切换；`freeDrawingStore`：独立 SVG 自由画图 Scene，禁止与 Diagram 状态混用。
 
 ## 修改约束
 
@@ -42,6 +43,7 @@ Web Speech API
 - `画/绘制/生成`基础图形表示新建作品，`添加/加/放置`表示编辑当前作品；任何完整画布替换前必须自动备份当前 Diagram。
 - 大型图表完成异步布局后必须重新执行 `fitView`，最小缩放比例应允许完整内容进入可视画布。
 - React Flow 与 ELK 是结构图渲染和自动布局的统一基础，不再为单一图表类型引入独立渲染器。
+- 专业图表继续使用 React Flow；自由画图使用独立 SVG 渲染器，两种模式分别保存作品与上下文，切换时不得互相覆盖。
 - Simple Path 多候选采用确定性最佳匹配，不使用确认流程阻塞；Agent 仅在关键语义歧义时允许通过可见反问卡片等待回答。
 - 麦克风监听默认关闭，只能由用户通过“开始语音输入 / 停止语音输入”按钮显式控制；停止后的残余识别结果不得执行。
 - 本地 ASR 同音纠错应优先结合命令目标槽位与当前画布对象，只在存在唯一同音目标时替换；不得对新文字等自由内容槽位进行猜测式纠错。
