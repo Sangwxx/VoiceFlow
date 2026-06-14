@@ -1,4 +1,10 @@
-import type { DiagramEdge, DiagramNode, NodeType } from '../../core/diagram/diagramTypes';
+import type {
+  DiagramEdge,
+  DiagramNode,
+  NodeStyle,
+  NodeType,
+  Size,
+} from '../../core/diagram/diagramTypes';
 import type { DiagramOperation } from '../../core/operations/operationTypes';
 
 export type SimpleIntentName =
@@ -6,6 +12,9 @@ export type SimpleIntentName =
   | 'delete_node'
   | 'update_node_text'
   | 'update_node_style'
+  | 'duplicate_node'
+  | 'resize_node'
+  | 'move_node'
   | 'create_edge'
   | 'delete_edge'
   | 'update_edge_style'
@@ -16,6 +25,9 @@ export type SimpleOperationDraft =
       intent: 'create_node';
       label: string;
       nodeType: NodeType;
+      size?: Size;
+      style?: NodeStyle;
+      placement?: 'left' | 'right' | 'top' | 'bottom' | 'center';
     }
   | {
       intent: 'delete_node';
@@ -35,10 +47,30 @@ export type SimpleOperationDraft =
       resolved?: Record<string, string>;
     }
   | {
+      intent: 'duplicate_node';
+      targetText: string;
+      resolved?: Record<string, string>;
+    }
+  | {
+      intent: 'resize_node';
+      targetText: string;
+      scale?: number;
+      width?: number;
+      height?: number;
+      resolved?: Record<string, string>;
+    }
+  | {
+      intent: 'move_node';
+      targetText: string;
+      placement: 'left' | 'right' | 'top' | 'bottom' | 'center';
+      resolved?: Record<string, string>;
+    }
+  | {
       intent: 'create_edge';
       sourceText: string;
       targetText: string;
       label?: string;
+      useRecentNodes?: boolean;
       resolved?: Record<string, string>;
     }
   | {

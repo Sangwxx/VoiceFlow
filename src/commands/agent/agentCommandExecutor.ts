@@ -1,22 +1,53 @@
 import type { SpeechFeedbackService } from '../../services/speechFeedbackService';
 import { useAgentStore } from '../../stores/agentStore';
 import { useCommandStore } from '../../stores/commandStore';
-import { createDiagramProposal, useProposalStore } from '../../stores/proposalStore';
 import { useDiagramStore } from '../../stores/diagramStore';
+import { saveCurrentDiagramVersion } from '../../services/diagramVersionService';
 import type { FastCommandExecutionResult } from '../fast/fastCommandExecutor';
 import { normalizeAgentResult } from './agentNormalizer';
 import type { AgentIntent, AiProvider } from './agentTypes';
+import { planLocalStructuralDiagram } from './structuralDiagramPlanner';
+import { describeDiagramSpatially } from '../../core/diagram/spatialSummary';
 
 export function createAgentCommandExecutor(
   provider: AiProvider,
   speechFeedback: SpeechFeedbackService,
 ) {
-  async function request(originalCommand: string, intent: AgentIntent) {
+  let inFlight: { key: string; promise: Promise<FastCommandExecutionResult> } | undefined;
+
+  function request(
+    originalCommand: string,
+    intent: AgentIntent,
+    conversation = useAgentStore.getState().conversation,
+  ): Promise<FastCommandExecutionResult> {
+    const key = `${intent}:${originalCommand.trim()}:${JSON.stringify(conversation)}`;
+    if (inFlight?.key === key) return inFlight.promise;
+    const promise = runRequest(originalCommand, intent, conversation).finally(() => {
+      if (inFlight?.key === key) inFlight = undefined;
+    });
+    inFlight = { key, promise };
+    return promise;
+  }
+
+  async function runRequest(
+    originalCommand: string,
+    intent: AgentIntent,
+    conversation: ReturnType<typeof useAgentStore.getState>['conversation'],
+  ): Promise<FastCommandExecutionResult> {
     const current = useAgentStore.getState();
-    current.controller?.abort();
+    if (
+      current.controller &&
+      (current.originalCommand !== originalCommand || current.intent !== intent)
+    ) {
+      current.controller.abort();
+    }
     const controller = new AbortController();
     const taskId = `agent-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const timeout = window.setTimeout(() => controller.abort(), 20_000);
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 120_000);
     useAgentStore.getState().setStateForTask({
       status: 'planning',
       providerMode: provider.mode,
@@ -26,7 +57,9 @@ export function createAgentCommandExecutor(
       previewDiagram: null,
       explanation: '',
       summary: '',
+      clarificationQuestion: '',
       error: null,
+      conversation,
       taskId,
       controller,
     });
@@ -34,37 +67,79 @@ export function createAgentCommandExecutor(
     try {
       const state = useAgentStore.getState();
       const diagram = useDiagramStore.getState().diagram;
-      const output = await provider.complete(
-        {
-          intent,
-          originalCommand,
-          conversation: state.conversation,
-          currentDiagram: intent === 'modify_diagram' ? diagram : undefined,
-          recentCommands: useCommandStore
-            .getState()
-            .executionLog.slice(0, 5)
-            .map((log) => log.rawText),
-        },
-        { signal: controller.signal },
-      );
+      if (intent === 'create_diagram' && provider.mode === 'unconfigured') {
+        const result = planLocalStructuralDiagram(originalCommand);
+        if (result.kind !== 'diagram') throw new Error('本地结构图规划失败');
+        useAgentStore.getState().setStateForTask({
+          status: 'preview',
+          previewDiagram: result.diagram,
+          explanation: result.explanation,
+          summary: result.summary,
+          controller: null,
+        });
+        saveCurrentDiagramVersion('auto_before_diagram_replace', true);
+        useDiagramStore.getState().replaceDiagram(result.diagram, '生成结构图');
+        useAgentStore.getState().clear();
+        const message = '未配置 AI，已使用本地规划器生成结构图';
+        useCommandStore.getState().setLastMessage(message);
+        void speechFeedback.speak(message);
+        return { status: 'success', message } as const;
+      }
+      const agentRequest = {
+        intent,
+        originalCommand,
+        conversation: state.conversation,
+        currentDiagram: intent === 'modify_diagram' ? diagram : undefined,
+        spatialSummary:
+          intent === 'modify_diagram' ? describeDiagramSpatially(diagram) : undefined,
+        recentCommands: useCommandStore
+          .getState()
+          .executionLog.slice(0, 5)
+          .map((log) => log.rawText),
+      };
+      const output = await provider.complete(agentRequest, { signal: controller.signal });
       if (useAgentStore.getState().taskId !== taskId) {
         return { status: 'ignored', message: 'AI 请求已被替换' } as const;
       }
-      const result = normalizeAgentResult(output, diagram);
+      let result;
+      try {
+        result = normalizeAgentResult(output, diagram);
+        ensureResultMatchesIntent(result, intent);
+      } catch (normalizationError) {
+        const repairedOutput = await provider.complete(
+          {
+            ...agentRequest,
+            conversation: [
+              ...state.conversation,
+              { role: 'assistant', content: String(output) },
+              {
+                role: 'user',
+                content: `上一条输出无法执行：${
+                  normalizationError instanceof Error
+                    ? normalizationError.message
+                    : String(normalizationError)
+                }。请只返回修正后的合法 JSON。`,
+              },
+            ],
+          },
+          { signal: controller.signal },
+        );
+        result = normalizeAgentResult(repairedOutput, diagram);
+        ensureResultMatchesIntent(result, intent);
+      }
       if (result.kind === 'clarification') {
+        const question = result.question;
         useAgentStore.getState().setStateForTask({
           status: 'clarifying',
           explanation: result.explanation,
-          summary: result.question,
-          conversation: [
-            ...state.conversation,
-            { role: 'assistant', content: result.question },
-          ],
+          summary: '等待用户补充信息',
+          clarificationQuestion: question,
+          conversation: [...state.conversation, { role: 'assistant', content: question }],
           controller: null,
         });
-        useCommandStore.getState().setLastMessage(result.question);
-        void speechFeedback.speak(result.question);
-        return { status: 'clarification', message: result.question } as const;
+        useCommandStore.getState().setLastMessage(question);
+        void speechFeedback.speak(question);
+        return { status: 'ignored', message: question } as const;
       }
 
       useAgentStore.getState().setStateForTask({
@@ -74,32 +149,26 @@ export function createAgentCommandExecutor(
         summary: result.summary,
         controller: null,
       });
-      useProposalStore
-        .getState()
-        .setProposal(
-          createDiagramProposal(
-            'agent',
-            result.diagram,
-            result.kind === 'operations' ? '确认 AI 修改图表' : '确认 AI 生成图表',
-            result.summary,
-            undefined,
-            result.kind === 'operations' ? result.operations : undefined,
-          ),
-        );
-      const message =
-        result.kind === 'operations'
-          ? 'AI 修改方案预览已生成，请说确认或取消'
-          : 'AI 图表预览已生成，请说确认或取消';
+      if (result.kind === 'operations') {
+        useDiagramStore.getState().applyOperations(result.operations, result.summary);
+      } else {
+        saveCurrentDiagramVersion('auto_before_diagram_replace', true);
+        useDiagramStore.getState().replaceDiagram(result.diagram, result.summary);
+      }
+      useAgentStore.getState().clear();
+      const message = result.kind === 'operations' ? 'AI 修改已应用' : 'AI 图表已生成';
       useCommandStore.getState().setLastMessage(message);
       void speechFeedback.speak(message);
       return { status: 'success', message } as const;
     } catch (error) {
-      const cancelled = controller.signal.aborted;
-      const message = cancelled
-        ? 'AI 请求已取消'
-        : error instanceof Error
-          ? error.message
-          : 'AI 图表生成失败';
+      const cancelled = controller.signal.aborted && !timedOut;
+      const message = timedOut
+        ? 'AI 请求超时，请重试或简化描述'
+        : cancelled
+          ? 'AI 请求已取消'
+          : error instanceof Error
+            ? error.message
+            : 'AI 图表生成失败';
       useAgentStore.getState().setStateForTask({
         status: cancelled ? 'cancelled' : 'error',
         previewDiagram: null,
@@ -116,26 +185,26 @@ export function createAgentCommandExecutor(
   return {
     execute(text: string, intent: AgentIntent): Promise<FastCommandExecutionResult> {
       useAgentStore.getState().setStateForTask({ conversation: [] });
-      return request(text, intent);
+      return request(text, intent, []);
     },
     answerClarification(text: string): Promise<FastCommandExecutionResult> {
       const state = useAgentStore.getState();
-      if (!state.intent || !state.originalCommand) {
-        return Promise.resolve({
-          status: 'ignored',
-          message: '当前没有待澄清的 AI 请求',
-        });
+      if (state.status !== 'clarifying' || !state.intent || !state.originalCommand) {
+        return Promise.resolve({ status: 'ignored', message: '当前没有等待回答的问题' });
       }
-      useAgentStore.getState().setStateForTask({
-        conversation: [...state.conversation, { role: 'user', content: text }],
-      });
-      return request(state.originalCommand, state.intent);
+      return request(state.originalCommand, state.intent, [
+        ...state.conversation,
+        { role: 'user', content: text },
+      ]);
     },
   };
 }
 
-export function confirmAgentPreview(): boolean {
-  const confirmed = useProposalStore.getState().confirm();
-  if (confirmed) useAgentStore.getState().clear();
-  return confirmed;
+function ensureResultMatchesIntent(
+  result: ReturnType<typeof normalizeAgentResult>,
+  intent: AgentIntent,
+): void {
+  if (intent === 'create_diagram' && result.kind === 'operations') {
+    throw new Error('完整图生成请求必须返回 diagram，不能返回 operations。');
+  }
 }

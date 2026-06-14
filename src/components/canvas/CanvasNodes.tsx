@@ -29,6 +29,7 @@ function toVisualStyle(style: NodeStyle | undefined): CSSProperties {
     borderRadius: style.borderRadius,
     fontSize: style.fontSize,
     fontWeight: style.fontWeight,
+    clipPath: style.clipPath,
   };
 }
 
@@ -38,25 +39,34 @@ function CanvasNode({ data }: VisualNodeProps) {
   const sourcePosition = horizontal ? Position.Right : Position.Bottom;
 
   return (
-    <div
-      className={`${styles.node} ${styles[data.nodeType]}`}
-      style={toVisualStyle(data.visualStyle)}
-      data-node-type={data.nodeType}
-    >
-      <Handle
-        type="target"
-        position={targetPosition}
-        isConnectable={false}
-        className={styles.handle}
-      />
-      <span className={styles.kind}>{TYPE_LABELS[data.nodeType]}</span>
-      <span className={styles.label}>{data.label}</span>
-      <Handle
-        type="source"
-        position={sourcePosition}
-        isConnectable={false}
-        className={styles.handle}
-      />
+    <div className={styles.nodeFrame}>
+      <div
+        className={`${styles.node} ${styles[data.nodeType]}`}
+        style={toVisualStyle(data.visualStyle)}
+        data-node-type={data.nodeType}
+      >
+        <Handle
+          type="target"
+          position={targetPosition}
+          isConnectable={false}
+          className={styles.handle}
+        />
+        <span className={styles.kind}>{TYPE_LABELS[data.nodeType]}</span>
+        <span className={styles.label}>{data.label}</span>
+        <Handle
+          type="source"
+          position={sourcePosition}
+          isConnectable={false}
+          className={styles.handle}
+        />
+      </div>
+      <span
+        className={styles.objectNumber}
+        data-voice-reference="true"
+        aria-label={`物体 ${data.temporaryNumber}`}
+      >
+        {data.temporaryNumber}
+      </span>
     </div>
   );
 }

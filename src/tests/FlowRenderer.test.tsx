@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { FlowRenderer } from '../components/canvas/FlowRenderer';
+import { FlowRenderer, MIN_CANVAS_ZOOM } from '../components/canvas/FlowRenderer';
 import { READ_ONLY_FLOW_PROPS } from '../components/canvas/readOnlyFlowConfig';
 import { applyDagreLayout } from '../core/layout/dagreLayout';
 import { loginFlowDiagram } from '../mock/loginFlowDiagram';
@@ -22,6 +22,7 @@ describe('FlowRenderer', () => {
   });
 
   it('keeps every user editing and viewport input disabled', () => {
+    expect(MIN_CANVAS_ZOOM).toBeLessThanOrEqual(0.05);
     expect(READ_ONLY_FLOW_PROPS).toMatchObject({
       nodesDraggable: false,
       nodesConnectable: false,

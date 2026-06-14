@@ -2,10 +2,11 @@ import {
   Background,
   BackgroundVariant,
   ReactFlow,
+  type EdgeTypes,
   type NodeTypes,
   type ReactFlowInstance,
 } from '@xyflow/react';
-import { forwardRef, useImperativeHandle, useMemo, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
 
 import type { Diagram } from '../../core/diagram/diagramTypes';
 import { logModuleError } from '../../utils/logger';
@@ -27,6 +28,7 @@ import {
   type ReactFlowNode,
 } from './canvasTypes';
 import styles from './FlowRenderer.module.css';
+import { NumberedEdge } from './NumberedEdge';
 import { READ_ONLY_FLOW_PROPS } from './readOnlyFlowConfig';
 
 export type CanvasViewportApi = {
@@ -40,6 +42,8 @@ type FlowRendererProps = {
   diagram: Diagram;
 };
 
+export const MIN_CANVAS_ZOOM = 0.05;
+
 const nodeTypes: NodeTypes = {
   start: StartNode,
   end: EndNode,
@@ -52,13 +56,50 @@ const nodeTypes: NodeTypes = {
   group: GroupNode,
 };
 
+const edgeTypes: EdgeTypes = {
+  numbered: NumberedEdge,
+};
+
 export const FlowRenderer = forwardRef<CanvasViewportApi, FlowRendererProps>(
   function FlowRenderer({ diagram }, ref) {
+    const [renderDiagram, setRenderDiagram] = useState(diagram);
     const [instance, setInstance] = useState<ReactFlowInstance<
       ReactFlowNode,
       ReactFlowEdge
     > | null>(null);
-    const flowElements = useMemo(() => diagramToReactFlow(diagram), [diagram]);
+    const flowElements = useMemo(
+      () => diagramToReactFlow(renderDiagram),
+      [renderDiagram],
+    );
+
+    useEffect(() => {
+      if (!instance || flowElements.nodes.length === 0) return;
+      const frame = window.requestAnimationFrame(() => {
+        void instance.fitView({ padding: 0.12, duration: 260, maxZoom: 1 });
+      });
+      return () => window.cancelAnimationFrame(frame);
+    }, [flowElements.nodes, instance]);
+
+    useEffect(() => {
+      let active = true;
+      setRenderDiagram(diagram);
+      void import('../../core/layout/elkCleanLayout')
+        .then(({ applyElkCleanAutoLayout }) => applyElkCleanAutoLayout(diagram))
+        .then((result) => {
+          if (active) setRenderDiagram(result.diagram);
+        })
+        .catch((error: unknown) => {
+          logModuleError(
+            'CleanAutoLayout',
+            'elk_layout_failed',
+            diagram.id,
+            error instanceof Error ? error.message : String(error),
+          );
+        });
+      return () => {
+        active = false;
+      };
+    }, [diagram]);
 
     useImperativeHandle(
       ref,
@@ -87,6 +128,7 @@ export const FlowRenderer = forwardRef<CanvasViewportApi, FlowRendererProps>(
           nodes={flowElements.nodes}
           edges={flowElements.edges}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           onInit={(flowInstance) => {
             setInstance(flowInstance);
             void flowInstance.fitView({ padding: 0.18 });
@@ -94,7 +136,7 @@ export const FlowRenderer = forwardRef<CanvasViewportApi, FlowRendererProps>(
           onError={(errorType, message) =>
             logModuleError('CanvasRenderer', errorType, diagram.id, message)
           }
-          minZoom={0.2}
+          minZoom={MIN_CANVAS_ZOOM}
           maxZoom={2}
           fitView
           {...READ_ONLY_FLOW_PROPS}

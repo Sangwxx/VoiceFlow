@@ -42,47 +42,42 @@ describe('workflowCommandExecutor', () => {
     expect(useCanvasViewStore.getState().exceptionPathsHidden).toBe(false);
   });
 
-  it('clarifies ambiguous focus targets', async () => {
+  it('selects the first best match for ambiguous focus targets', async () => {
     const duplicate = structuredClone(useDiagramStore.getState().diagram);
     duplicate.nodes.push({ id: 'login-page-copy', label: '进入登录页', type: 'process' });
     useDiagramStore.getState().reset(duplicate);
     const execute = createWorkflowCommandExecutor(feedback);
     const result = await execute.execute('focus_node', '聚焦登录页');
-    expect(result.status).toBe('clarification');
-    expect(useWorkflowStore.getState().pendingFocusClarification).toHaveLength(2);
-    await execute.answerClarification('第二个');
-    expect(useCanvasViewStore.getState().focusedNodeId).toBe('login-page-copy');
+    expect(result.status).toBe('success');
+    expect(useWorkflowStore.getState().pendingFocusClarification).toBeNull();
+    expect(useCanvasViewStore.getState().focusedNodeId).toBe('login-page');
   });
 
-  it('clarifies duplicate version names and resolves ordinal answers', async () => {
+  it('restores the first best match for duplicate version names', async () => {
     const execute = createWorkflowCommandExecutor(feedback);
     await execute.execute('save_version', '保存当前版本叫方案');
     await execute.execute('save_version', '保存当前版本叫方案');
     const result = await execute.execute('restore_version', '恢复版本方案');
-    expect(result.status).toBe('clarification');
-    expect(
-      useWorkflowStore.getState().pendingVersionClarification?.candidates,
-    ).toHaveLength(2);
-    await execute.answerClarification('第二个');
-    expect(useProposalStore.getState().proposal?.source).toBe('version_restore');
+    expect(result.status).toBe('success');
+    expect(useWorkflowStore.getState().pendingVersionClarification).toBeNull();
+    expect(useProposalStore.getState().proposal).toBeNull();
   });
 
-  it('previews report mode and demo scenes', async () => {
+  it('applies report mode and demo scenes directly', async () => {
     const execute = createWorkflowCommandExecutor(feedback);
     await execute.execute('report_mode', '整理成适合汇报的版本');
-    expect(useProposalStore.getState().proposal?.source).toBe('report_mode');
-    useProposalStore.getState().cancel();
+    expect(useDiagramStore.getState().diagram.theme.name).toBe('report_clean');
     await execute.execute('load_ecommerce_scene', '加载电商订单演示场景');
-    expect(useProposalStore.getState().proposal?.diagram.title).toBe('电商订单流程');
+    expect(useDiagramStore.getState().diagram.title).toBe('电商订单流程');
   });
 
-  it('saves, compares and previews restoration of named versions', async () => {
+  it('saves, compares and restores named versions directly', async () => {
     const execute = createWorkflowCommandExecutor(feedback);
     await execute.execute('save_version', '保存当前版本叫初始流程');
     expect(useVersionStore.getState().versions[0].name).toBe('初始流程');
     await execute.execute('compare_version', '对比版本初始流程');
     expect(useVersionStore.getState().lastDiff).not.toBeNull();
     await execute.execute('restore_version', '恢复版本初始流程');
-    expect(useProposalStore.getState().proposal?.source).toBe('version_restore');
+    expect(useProposalStore.getState().proposal).toBeNull();
   });
 });

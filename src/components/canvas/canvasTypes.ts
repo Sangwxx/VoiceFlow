@@ -4,22 +4,31 @@ import type {
   Diagram,
   DiagramEdge,
   DiagramEdgeType,
+  EdgeRouting,
   LayoutDirection,
   NodeStyle,
   NodeType,
 } from '../../core/diagram/diagramTypes';
 import { getNodeSize } from '../../core/diagram/diagramUtils';
+import { getTemporaryObjectNumber } from '../../core/diagram/temporaryObjectReferences';
 
 export type CanvasNodeData = {
   label: string;
   nodeType: NodeType;
   layoutDirection: LayoutDirection;
   visualStyle?: NodeStyle;
+  temporaryNumber: number;
+  routing?: EdgeRouting;
   [key: string]: unknown;
 };
 
 export type ReactFlowNode = Node<CanvasNodeData, NodeType>;
-export type ReactFlowEdge = Edge<Record<string, unknown>, 'smoothstep'>;
+export type CanvasEdgeData = {
+  diagramEdgeType: DiagramEdgeType;
+  temporaryNumber: number;
+  [key: string]: unknown;
+};
+export type ReactFlowEdge = Edge<CanvasEdgeData, 'numbered'>;
 
 const EDGE_PRESETS: Record<
   DiagramEdgeType,
@@ -31,7 +40,7 @@ const EDGE_PRESETS: Record<
   weak: { stroke: '#aab5c5', strokeWidth: 1.5, strokeDasharray: '6 5' },
 };
 
-function toReactFlowEdge(edge: DiagramEdge): ReactFlowEdge {
+function toReactFlowEdge(diagram: Diagram, edge: DiagramEdge): ReactFlowEdge {
   const preset = EDGE_PRESETS[edge.type ?? 'solid'];
   const stroke = edge.style?.stroke ?? preset.stroke;
 
@@ -39,7 +48,7 @@ function toReactFlowEdge(edge: DiagramEdge): ReactFlowEdge {
     id: edge.id,
     source: edge.from,
     target: edge.to,
-    type: 'smoothstep',
+    type: 'numbered',
     label: edge.label,
     markerEnd: {
       type: MarkerType.ArrowClosed,
@@ -70,6 +79,9 @@ function toReactFlowEdge(edge: DiagramEdge): ReactFlowEdge {
     interactionWidth: 0,
     data: {
       diagramEdgeType: edge.type ?? 'solid',
+      temporaryNumber:
+        getTemporaryObjectNumber(diagram, 'edge', edge.id) ?? diagram.nodes.length + 1,
+      routing: edge.routing,
     },
   };
 }
@@ -90,6 +102,7 @@ export function diagramToReactFlow(diagram: Diagram): {
           nodeType: node.type,
           layoutDirection: diagram.layout.direction,
           visualStyle: node.style,
+          temporaryNumber: getTemporaryObjectNumber(diagram, 'node', node.id) ?? 1,
         },
         style: {
           width: size.width,
@@ -103,6 +116,6 @@ export function diagramToReactFlow(diagram: Diagram): {
         ariaLabel: node.label,
       };
     }),
-    edges: diagram.edges.map(toReactFlowEdge),
+    edges: diagram.edges.map((edge) => toReactFlowEdge(diagram, edge)),
   };
 }

@@ -38,6 +38,66 @@ describe('executeOperation', () => {
     ).toThrow('节点 "missing" 不存在');
   });
 
+  it('moves a node without triggering automatic layout', () => {
+    const result = executeOperation(loginFlowDiagram, {
+      id: 'move-login',
+      type: 'move_node',
+      nodeId: 'login-page',
+      position: { x: 40, y: 900 },
+      timestamp: '2026-06-12T10:00:00.000Z',
+    });
+
+    expect(result.nodes.find((node) => node.id === 'login-page')?.position).toEqual({
+      x: 40,
+      y: 900,
+    });
+    expect(result.layout.autoLayout).toBe(false);
+  });
+
+  it('solves semantic relative positions and reroutes the edge', () => {
+    const result = executeOperation(loginFlowDiagram, {
+      id: 'position-login',
+      type: 'set_relative_position',
+      nodeId: 'login-page',
+      referenceNodeId: 'open-app',
+      relation: 'right_of',
+      timestamp: '2026-06-12T10:00:00.000Z',
+    });
+    const login = result.nodes.find((node) => node.id === 'login-page')!;
+    const openApp = result.nodes.find((node) => node.id === 'open-app')!;
+
+    expect(login.position!.x).toBeGreaterThan(openApp.position!.x);
+    expect(login.position!.y).toBe(openApp.position!.y);
+    expect(result.layout.autoLayout).toBe(false);
+    expect(result.edges.every((edge) => edge.routing?.points.length)).toBe(true);
+  });
+
+  it('aligns nodes and changes an edge direction through semantic operations', () => {
+    const aligned = executeOperation(loginFlowDiagram, {
+      id: 'align-login',
+      type: 'align_nodes',
+      nodeIds: ['open-app', 'login-page'],
+      axis: 'horizontal',
+      timestamp: '2026-06-12T10:00:00.000Z',
+    });
+    const openApp = aligned.nodes.find((node) => node.id === 'open-app')!;
+    const login = aligned.nodes.find((node) => node.id === 'login-page')!;
+    expect(openApp.position!.y + 32).toBe(login.position!.y + 32);
+
+    const reversed = executeOperation(aligned, {
+      id: 'reverse-edge',
+      type: 'set_edge_endpoints',
+      edgeId: 'e-start-open',
+      from: 'open-app',
+      to: 'start',
+      timestamp: '2026-06-12T10:01:00.000Z',
+    });
+    expect(reversed.edges.find((edge) => edge.id === 'e-start-open')).toMatchObject({
+      from: 'open-app',
+      to: 'start',
+    });
+  });
+
   it('creates, updates and deletes nodes and edges without mutating input', () => {
     const input = structuredClone(loginFlowDiagram);
     const snapshot = structuredClone(input);

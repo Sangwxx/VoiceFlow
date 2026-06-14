@@ -61,20 +61,25 @@ describe('validateDiagram', () => {
     }
   });
 
-  it('rejects non-empty groups during phase 1', () => {
+  it('accepts valid groups and rejects missing group node references', () => {
     const input = {
       ...structuredClone(loginFlowDiagram),
-      groups: [{ id: 'g1', label: '暂不支持', nodeIds: ['start'] }],
+      groups: [{ id: 'g1', label: '入口', nodeIds: ['start'] }],
     };
 
     const result = validateDiagram(input);
 
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.errors).toContainEqual(
-        expect.objectContaining({ code: 'unsupported', path: 'groups' }),
+    expect(result.success).toBe(true);
+    input.groups[0].nodeIds = ['missing'];
+    const invalid = validateDiagram(input);
+    expect(invalid.success).toBe(false);
+    if (!invalid.success)
+      expect(invalid.errors).toContainEqual(
+        expect.objectContaining({
+          code: 'invalid_reference',
+          path: 'groups[0].nodeIds[0]',
+        }),
       );
-    }
   });
 
   it('rejects invalid coordinates and dimensions', () => {

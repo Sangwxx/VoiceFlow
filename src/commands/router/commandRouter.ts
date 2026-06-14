@@ -6,8 +6,7 @@ import {
 import { parseSimpleCommand } from '../simple/simpleCommandParser';
 import type { RouteResult } from './routeTypes';
 
-const ARCHITECTURE_PATTERNS = ['架构图', '系统架构', '服务架构', '技术架构'];
-const FLOWCHART_PATTERNS = [
+const DIAGRAM_GENERATION_PATTERNS = [
   '画一个',
   '画一张',
   '生成一个',
@@ -19,13 +18,38 @@ const FLOWCHART_PATTERNS = [
   '绘制一个',
   '绘制一张',
   '流程图',
+  '架构图',
+  '组织结构图',
+  '用例图',
+  '思维导图',
+  '脑图',
+  '数据流图',
+  '框架图',
+  '结构图',
+  '表格',
   '学习流程',
   '完整流程',
+  '帮我画',
+  '帮我生成',
+  '帮我创建',
+  '设计一个',
+  '梳理一个',
+  '整理一个',
+  '学习路径',
+  '学习计划',
+  '知识结构',
+  '知识图谱',
+  '步骤图',
 ];
 const SIMPLE_HINTS = ['添加节点', '加节点', '删除节点', '修改节点', '连接'];
 const CONTEXTUAL_MODIFICATION_PATTERNS = [
   /把.+(改|换|弄|调整|优化|整理)/,
   /(加上|补上|补一个|插入|增加|删除|移除|连接|断开).+/,
+  /箭头.+指向/,
+  /.+(?:位于|放到|移动到).+(?:左|右|上|下)/,
+  /.+在.+(?:左|右|上|下)(?:边|侧|方)/,
+  /(?:水平|垂直).*对齐/,
+  /交换.+位置/,
   /(主流程|失败分支|成功分支|异常分支|当前图|这个图).+(突出|弱化|修改|调整|优化)/,
 ];
 const WORKFLOW_PATTERNS = [
@@ -89,6 +113,20 @@ export function routeCommand(text: string): RouteResult {
     };
   }
 
+  const objectCommand = parseSimpleCommand(text);
+  if (
+    objectCommand.status === 'ready' &&
+    ['duplicate_node', 'resize_node'].includes(objectCommand.intent)
+  ) {
+    return {
+      ...base,
+      route: 'simple',
+      confidence: 0.96,
+      simpleIntent: objectCommand.intent,
+      reason: '识别为对象级绘图操作',
+    };
+  }
+
   const fast = matchFastCommand(normalizedText);
   if (fast) {
     return {
@@ -132,22 +170,13 @@ export function routeCommand(text: string): RouteResult {
     };
   }
 
-  if (ARCHITECTURE_PATTERNS.some((pattern) => normalizedText.includes(pattern))) {
-    return {
-      ...base,
-      route: 'agent',
-      confidence: 0.92,
-      agentIntent: 'create_architecture',
-      reason: '识别为完整系统架构图生成请求',
-    };
-  }
-  if (FLOWCHART_PATTERNS.some((pattern) => normalizedText.includes(pattern))) {
+  if (DIAGRAM_GENERATION_PATTERNS.some((pattern) => normalizedText.includes(pattern))) {
     return {
       ...base,
       route: 'agent',
       confidence: 0.9,
-      agentIntent: 'create_flowchart',
-      reason: '识别为完整流程图生成请求',
+      agentIntent: 'create_diagram',
+      reason: '识别为通用结构图生成请求',
     };
   }
   if (CONTEXTUAL_MODIFICATION_PATTERNS.some((pattern) => pattern.test(normalizedText))) {

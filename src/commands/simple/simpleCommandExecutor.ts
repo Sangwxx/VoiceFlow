@@ -7,7 +7,11 @@ import type {
   NodeStyle,
 } from '../../core/diagram/diagramTypes';
 import type { DiagramOperation } from '../../core/operations/operationTypes';
+import { executeOperations } from '../../core/operations/operationExecutor';
+import { createBlankDiagram } from '../../core/diagram/blankDiagram';
+import { getNodeSize } from '../../core/diagram/diagramUtils';
 import type { SpeechFeedbackService } from '../../services/speechFeedbackService';
+import { saveCurrentDiagramVersion } from '../../services/diagramVersionService';
 import { useCommandStore } from '../../stores/commandStore';
 import { useDiagramStore } from '../../stores/diagramStore';
 import { createId } from '../../utils/id';
@@ -19,9 +23,9 @@ import {
   resolveNode,
 } from './entityResolver';
 import { parseSimpleCommand } from './simpleCommandParser';
+import { matchGenericDrawingActions } from './genericDrawingMatcher';
 import type {
   ClarificationCandidate,
-  ClarificationRequest,
   ResolvedTarget,
   SimpleExecutionResult,
   SimpleOperationDraft,
@@ -45,10 +49,97 @@ const EDGE_COLORS: Record<string, string> = {
 
 export function createSimpleCommandExecutor(speechFeedback: SpeechFeedbackService) {
   async function execute(text: string): Promise<SimpleExecutionResult> {
+    const genericDrafts = matchGenericDrawingActions(text);
+    if (genericDrafts.length) return executeGenericBatch(genericDrafts, text);
     const parsed = parseSimpleCommand(text);
     if (parsed.status !== 'ready')
       return finish({ status: 'error', message: parsed.message });
     return executeDraft(parsed.draft, text);
+  }
+
+  async function executeGenericBatch(
+    drafts: SimpleOperationDraft[],
+    originalCommand: string,
+  ): Promise<SimpleExecutionResult> {
+    const createDrafts = drafts.filter(
+      (draft): draft is Extract<SimpleOperationDraft, { intent: 'create_node' }> =>
+        draft.intent === 'create_node',
+    );
+    const nodeOperations = createDrafts.map((draft) =>
+      createNodeOperation(
+        draft.label,
+        draft.nodeType,
+        `创建图形“${draft.label}”`,
+        draft.size,
+        draft.style,
+      ),
+    );
+    const createdNodes = nodeOperations.map((operation) => operation.node);
+    const edgeOperations =
+      /连接|连线|箭头/.test(originalCommand) && createdNodes.length > 1
+        ? createdNodes.slice(1).map((node, index) =>
+            operation(
+              'create_edge',
+              `连接图形“${createdNodes[index].label}”到“${node.label}”`,
+              {
+                edge: {
+                  id: createId('edge'),
+                  from: createdNodes[index].id,
+                  to: node.id,
+                },
+              },
+            ),
+          )
+        : [];
+    const moveOperations = createDrafts.flatMap((draft, index) =>
+      draft.placement
+        ? [
+            operation('move_node', `将图形“${createdNodes[index].label}”放到指定位置`, {
+              nodeId: createdNodes[index].id,
+              position: genericPlacementPosition(draft.placement, index),
+            }),
+          ]
+        : [],
+    );
+    const operations = [...nodeOperations, ...edgeOperations, ...moveOperations];
+    const startsNewCanvas = /^(?:画出?|绘制出?|生成|创建)/.test(
+      normalizeText(originalCommand).replace(/^(?:请|帮我|请帮我)/, ''),
+    );
+    const verification = startsNewCanvas
+      ? replaceWithGenericDrawing(operations, createdNodes.length)
+      : useDiagramStore
+          .getState()
+          .applyOperations(operations, `批量创建 ${createdNodes.length} 个图形`);
+    if (!verification.verified) {
+      return finish({
+        status: 'ignored',
+        intent: 'create_node',
+        message: verification.message,
+      });
+    }
+    const lastOperation = nodeOperations.at(-1);
+    const lastNode = lastOperation?.node;
+    if (lastNode && lastOperation) {
+      useCommandStore.getState().setLastTarget(nodeTarget(lastNode));
+      useCommandStore.getState().setLastOperation(lastOperation);
+    }
+    return finish({
+      status: 'success',
+      intent: 'create_node',
+      message: `已创建 ${createdNodes.length} 个图形${edgeOperations.length ? `并连接 ${edgeOperations.length} 条线` : ''}`,
+      target: lastNode ? nodeTarget(lastNode) : undefined,
+      operation: lastOperation,
+    });
+  }
+
+  function replaceWithGenericDrawing(operations: DiagramOperation[], nodeCount: number) {
+    saveCurrentDiagramVersion('auto_before_shape_drawing', true);
+    const blank = createBlankDiagram();
+    blank.title = nodeCount === 1 ? '单个图形' : '图形组合';
+    const next = executeOperations(blank, operations);
+    return useDiagramStore
+      .getState()
+      .replaceDiagram(next, `新建包含 ${nodeCount} 个图形的画布`);
   }
 
   async function answerClarification(text: string): Promise<SimpleExecutionResult> {
@@ -79,7 +170,13 @@ export function createSimpleCommandExecutor(speechFeedback: SpeechFeedbackServic
       switch (draft.intent) {
         case 'create_node':
           return apply(
-            createNodeOperation(draft.label, draft.nodeType, `创建节点“${draft.label}”`),
+            createNodeOperation(
+              draft.label,
+              draft.nodeType,
+              `创建节点“${draft.label}”`,
+              draft.size,
+              draft.style,
+            ),
             `已创建节点${draft.label}`,
             { kind: 'node', id: '', label: draft.label },
             draft.intent,
@@ -138,15 +235,7 @@ export function createSimpleCommandExecutor(speechFeedback: SpeechFeedbackServic
             draft.intent,
           );
         }
-        case 'create_edge': {
-          const source = await requireNode(
-            diagram,
-            draft,
-            'sourceNodeId',
-            draft.sourceText,
-            originalCommand,
-          );
-          if (!source) return finish(clarificationResult());
+        case 'duplicate_node': {
           const target = await requireNode(
             diagram,
             draft,
@@ -154,6 +243,99 @@ export function createSimpleCommandExecutor(speechFeedback: SpeechFeedbackServic
             draft.targetText,
             originalCommand,
           );
+          if (!target) return finish(clarificationResult());
+          const duplicate: DiagramNode = {
+            ...target,
+            id: createId('node'),
+            label: `${target.label}副本`,
+            position: undefined,
+            size: target.size ? { ...target.size } : undefined,
+            style: target.style ? { ...target.style } : undefined,
+            data: target.data ? { ...target.data } : undefined,
+          };
+          return apply(
+            operation('create_node', `复制节点“${target.label}”`, { node: duplicate }),
+            `已复制${target.label}`,
+            nodeTarget(duplicate),
+            draft.intent,
+          );
+        }
+        case 'resize_node': {
+          const target = await requireNode(
+            diagram,
+            draft,
+            'targetNodeId',
+            draft.targetText,
+            originalCommand,
+          );
+          if (!target) return finish(clarificationResult());
+          const current = getNodeSize(target);
+          const width = draft.width ?? Math.round(current.width * (draft.scale ?? 1));
+          const height = draft.height ?? Math.round(current.height * (draft.scale ?? 1));
+          if (width < 24 || height < 24 || width > 2000 || height > 2000) {
+            return finish({
+              status: 'error',
+              intent: draft.intent,
+              message: '尺寸需要在 24 到 2000 之间',
+            });
+          }
+          return apply(
+            operation('update_node', `调整节点“${target.label}”尺寸`, {
+              nodeId: target.id,
+              patch: { size: { width, height } },
+            }),
+            `已调整${target.label}尺寸`,
+            nodeTarget(target),
+            draft.intent,
+          );
+        }
+        case 'move_node': {
+          const target = await requireNode(
+            diagram,
+            draft,
+            'targetNodeId',
+            draft.targetText,
+            originalCommand,
+          );
+          if (!target) return finish(clarificationResult());
+          return apply(
+            operation('move_node', `将节点“${target.label}”移动到指定位置`, {
+              nodeId: target.id,
+              position: relativePlacementPosition(diagram, target, draft.placement),
+            }),
+            `已将${target.label}移动到${placementLabel(draft.placement)}`,
+            nodeTarget(target),
+            draft.intent,
+          );
+        }
+        case 'create_edge': {
+          const recentNodes = draft.useRecentNodes ? diagram.nodes.slice(-2) : [];
+          const source =
+            recentNodes[0] ??
+            (await requireNode(
+              diagram,
+              draft,
+              'sourceNodeId',
+              draft.sourceText,
+              originalCommand,
+            ));
+          if (!source) return finish(clarificationResult());
+          const target =
+            recentNodes[1] ??
+            (await requireNode(
+              diagram,
+              draft,
+              'targetNodeId',
+              draft.targetText,
+              originalCommand,
+            ));
+          if (draft.useRecentNodes && recentNodes.length < 2) {
+            return finish({
+              status: 'error',
+              intent: draft.intent,
+              message: '至少需要两个节点才能生成连线',
+            });
+          }
           if (!target) return finish(clarificationResult());
           const edge: DiagramEdge = {
             id: createId('edge'),
@@ -265,7 +447,16 @@ export function createSimpleCommandExecutor(speechFeedback: SpeechFeedbackServic
     target: ResolvedTarget,
     intent: SimpleExecutionResult['intent'],
   ): Promise<SimpleExecutionResult> {
-    useDiagramStore.getState().applyOperation(operationValue);
+    const verification = useDiagramStore.getState().applyOperation(operationValue);
+    if (!verification.verified) {
+      return finish({
+        status: 'ignored',
+        message: `${verification.message}，请换一种描述或确认目标`,
+        intent,
+        target,
+        operation: operationValue,
+      });
+    }
     const actualTarget =
       target.id || ('node' in operationValue ? nodeTarget(operationValue.node) : target);
     useCommandStore.getState().setLastTarget(actualTarget);
@@ -293,22 +484,15 @@ async function requireNode(
   draft: SimpleOperationDraft,
   field: string,
   query: string,
-  originalCommand: string,
+  _originalCommand: string,
 ): Promise<DiagramNode | null> {
+  void _originalCommand;
   const resolvedId = draft.resolved?.[field];
   if (resolvedId) return diagram.nodes.find((node) => node.id === resolvedId) ?? null;
   const result = resolveNode(diagram, query, useCommandStore.getState().lastTarget?.id);
   if (result.status === 'found') return result.item;
-  const candidates =
-    result.status === 'multiple' ? result.candidates : result.suggestions;
-  if (candidates.length) {
-    setClarification(
-      originalCommand,
-      draft,
-      field,
-      candidates.map(nodeCandidate),
-      `你指的是哪个节点？`,
-    );
+  if (result.status === 'multiple' && result.candidates.length) {
+    return result.candidates[0];
   } else {
     useCommandStore.getState().setPendingClarification(null);
     useCommandStore.getState().setLastMessage(`没有找到“${query}”节点。`);
@@ -319,8 +503,9 @@ async function requireNode(
 async function requireEdge(
   diagram: Diagram,
   draft: Extract<SimpleOperationDraft, { intent: 'delete_edge' | 'update_edge_style' }>,
-  originalCommand: string,
+  _originalCommand: string,
 ): Promise<DiagramEdge | null> {
+  const originalCommand = _originalCommand;
   const resolvedId = draft.resolved?.edgeId;
   if (resolvedId) return diagram.edges.find((edge) => edge.id === resolvedId) ?? null;
   let result;
@@ -350,16 +535,8 @@ async function requireEdge(
     );
   }
   if (result.status === 'found') return result.item;
-  const candidates =
-    result.status === 'multiple' ? result.candidates : result.suggestions;
-  if (candidates.length) {
-    setClarification(
-      originalCommand,
-      draft,
-      'edgeId',
-      candidates.map((edge) => edgeCandidate(diagram, edge)),
-      '你指的是哪条连线？',
-    );
+  if (result.status === 'multiple' && result.candidates.length) {
+    return result.candidates[0];
   } else {
     useCommandStore.getState().setPendingClarification(null);
     useCommandStore.getState().setLastMessage('没有找到对应连线。');
@@ -373,41 +550,10 @@ async function requireOutgoingEdge(
   outgoing: DiagramEdge[],
   originalCommand: string,
 ): Promise<DiagramEdge | null> {
+  void originalCommand;
   const resolvedId = draft.resolved?.replacedEdgeId;
   if (resolvedId) return outgoing.find((edge) => edge.id === resolvedId) ?? null;
-  if (outgoing.length === 1) return outgoing[0];
-  setClarification(
-    originalCommand,
-    draft,
-    'replacedEdgeId',
-    outgoing.map((edge) => edgeCandidate(diagram, edge)),
-    '请选择要插入的具体分支。',
-  );
-  return null;
-}
-
-function setClarification(
-  originalCommand: string,
-  draft: SimpleOperationDraft,
-  resolutionField: string,
-  candidates: ClarificationCandidate[],
-  question: string,
-): void {
-  const spokenQuestion = candidates.length
-    ? `${question} ${candidates
-        .map((candidate, index) => `${ordinalLabel(index)}，${candidate.label}`)
-        .join('；')}`
-    : question;
-  const request: ClarificationRequest = {
-    id: createId('clarification'),
-    originalCommand,
-    question: spokenQuestion,
-    candidates,
-    draft,
-    resolutionField,
-  };
-  useCommandStore.getState().setPendingClarification(request);
-  useCommandStore.getState().setLastMessage(spokenQuestion);
+  return outgoing[0] ?? null;
 }
 
 function clarificationResult(): SimpleExecutionResult {
@@ -449,10 +595,6 @@ function chooseCandidate(
   return matches.length === 1 ? matches[0] : null;
 }
 
-function ordinalLabel(index: number): string {
-  return ['第一个', '第二个', '第三个', '第四个'][index] ?? `第${index + 1}个`;
-}
-
 function makeNode(label: string, type: DiagramNode['type']): DiagramNode {
   return { id: createId('node'), label, type };
 }
@@ -461,8 +603,12 @@ function createNodeOperation(
   label: string,
   type: DiagramNode['type'],
   description: string,
+  size?: DiagramNode['size'],
+  style?: DiagramNode['style'],
 ): DiagramOperation {
-  return operation('create_node', description, { node: makeNode(label, type) });
+  return operation('create_node', description, {
+    node: { ...makeNode(label, type), size, style },
+  });
 }
 
 function operation<T extends DiagramOperation['type']>(
@@ -482,19 +628,77 @@ function operation<T extends DiagramOperation['type']>(
   } as Extract<DiagramOperation, { type: T }>;
 }
 
-function nodeCandidate(node: DiagramNode): ClarificationCandidate {
-  return { id: node.id, label: node.label, kind: 'node', detail: node.type };
-}
-
-function edgeCandidate(diagram: Diagram, edge: DiagramEdge): ClarificationCandidate {
-  const label = describeEdge(diagram, edge);
-  return { id: edge.id, label, kind: 'edge', detail: edge.label };
-}
-
 function nodeTarget(node: DiagramNode): ResolvedTarget {
   return { kind: 'node', id: node.id, label: node.label };
 }
 
 function edgeTarget(diagram: Diagram, edge: DiagramEdge): ResolvedTarget {
   return { kind: 'edge', id: edge.id, label: describeEdge(diagram, edge) };
+}
+
+function genericPlacementPosition(
+  placement: Extract<SimpleOperationDraft, { intent: 'create_node' }>['placement'] & {},
+  index: number,
+): { x: number; y: number } {
+  const offset = index * 24;
+  switch (placement) {
+    case 'left':
+      return { x: 120, y: 280 + offset };
+    case 'right':
+      return { x: 620, y: 280 + offset };
+    case 'top':
+      return { x: 370 + offset, y: 80 };
+    case 'bottom':
+      return { x: 370 + offset, y: 560 };
+    case 'center':
+      return { x: 370 + offset, y: 280 };
+  }
+}
+
+function relativePlacementPosition(
+  diagram: Diagram,
+  target: DiagramNode,
+  placement: Extract<SimpleOperationDraft, { intent: 'move_node' }>['placement'],
+): { x: number; y: number } {
+  const positioned = diagram.nodes.filter(
+    (node): node is DiagramNode & { position: { x: number; y: number } } =>
+      node.id !== target.id && node.position !== undefined,
+  );
+  if (!positioned.length) return genericPlacementPosition(placement, 0);
+  const minX = Math.min(...positioned.map((node) => node.position.x));
+  const maxX = Math.max(
+    ...positioned.map((node) => node.position.x + getNodeSize(node).width),
+  );
+  const minY = Math.min(...positioned.map((node) => node.position.y));
+  const maxY = Math.max(
+    ...positioned.map((node) => node.position.y + getNodeSize(node).height),
+  );
+  const size = getNodeSize(target);
+  const centerX = (minX + maxX - size.width) / 2;
+  const centerY = (minY + maxY - size.height) / 2;
+  const gap = 120;
+  switch (placement) {
+    case 'left':
+      return { x: minX - size.width - gap, y: centerY };
+    case 'right':
+      return { x: maxX + gap, y: centerY };
+    case 'top':
+      return { x: centerX, y: minY - size.height - gap };
+    case 'bottom':
+      return { x: centerX, y: maxY + gap };
+    case 'center':
+      return { x: centerX, y: centerY };
+  }
+}
+
+function placementLabel(
+  placement: Extract<SimpleOperationDraft, { intent: 'move_node' }>['placement'],
+): string {
+  return {
+    left: '最左侧',
+    right: '最右侧',
+    top: '最上方',
+    bottom: '最下方',
+    center: '中央',
+  }[placement];
 }

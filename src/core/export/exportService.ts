@@ -27,6 +27,10 @@ export function safeExportFilename(title: string): string {
   );
 }
 
+export function shouldIncludeInExport(node: HTMLElement): boolean {
+  return node.getAttribute('data-voice-reference') !== 'true';
+}
+
 function triggerDownload(url: string, filename: string) {
   const anchor = document.createElement('a');
   anchor.href = url;
@@ -55,7 +59,11 @@ export class BrowserExportService implements ExportService {
         this.dependencies.wait ??
         ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
       )(250);
-      const options = { backgroundColor: '#ffffff', cacheBust: true };
+      const options = {
+        backgroundColor: '#ffffff',
+        cacheBust: true,
+        filter: shouldIncludeInExport,
+      };
       url =
         format === 'svg'
           ? await (this.dependencies.captureSvg ?? ((node) => toSvg(node, options)))(

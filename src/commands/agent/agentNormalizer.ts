@@ -6,6 +6,12 @@ import {
   type DiagramEdge,
   type DiagramNode,
 } from '../../core/diagram/diagramTypes';
+import {
+  ALIGNMENT_AXES,
+  SPATIAL_RELATIONS,
+  type AlignmentAxis,
+  type SpatialRelation,
+} from '../../core/diagram/spatialTypes';
 import { validateDiagram } from '../../core/diagram/diagramValidators';
 import { defaultLayoutEngine } from '../../core/layout/layoutEngine';
 import { executeOperations } from '../../core/operations/operationExecutor';
@@ -119,19 +125,26 @@ export function normalizeAgentResult(
   const rawType = source.diagramType ?? source.diagram_type;
   const diagramType = DIAGRAM_TYPES.includes(rawType as never)
     ? (rawType as Diagram['diagramType'])
-    : 'flowchart';
+    : 'generic';
   const rawLayout = recordOrEmpty(source.layout);
-  const rawDirection = rawLayout.direction ?? rawLayout.layout_direction;
+  const rawDirection =
+    source.direction ?? rawLayout.direction ?? rawLayout.layout_direction;
   const direction = rawDirection === 'left_to_right' ? 'left_to_right' : 'top_down';
+  const groups = normalizeGroups(source.groups, idMap);
   const diagram: Diagram = {
     id: slug(stringValue(source.id, `agent_${Date.now()}`), `agent_${Date.now()}`),
     title: stringValue(source.title, 'AI 生成图表'),
     diagramType,
     nodes,
     edges,
-    groups: [],
+    groups,
     layout: { direction, spacingX: 90, spacingY: 80, autoLayout: true },
-    theme: { name: diagramType === 'architecture' ? 'tech_dark' : 'business_blue' },
+    theme: {
+      name:
+        diagramType === 'architecture' || diagramType === 'framework'
+          ? 'tech_dark'
+          : 'business_blue',
+    },
     metadata: { createdAt: now, updatedAt: now, version: 1 },
   };
   const validation = validateDiagram(diagram);
@@ -148,6 +161,25 @@ export function normalizeAgentResult(
     ),
     diagram: defaultLayoutEngine.layout(validation.data),
   };
+}
+
+function normalizeGroups(value: unknown, idMap: Map<string, string>): Diagram['groups'] {
+  if (!Array.isArray(value)) return [];
+  const usedIds = new Set<string>();
+  return value.map((raw, index) => {
+    const group = record(raw);
+    const label = stringValue(group.label ?? group.name, `分组 ${index + 1}`);
+    const nodeIds = Array.isArray(group.nodeIds)
+      ? group.nodeIds
+          .filter((nodeId): nodeId is string => typeof nodeId === 'string')
+          .map((nodeId) => idMap.get(nodeId) ?? nodeId)
+      : [];
+    return {
+      id: uniqueId(slug(stringValue(group.id, label), `group_${index + 1}`), usedIds),
+      label,
+      nodeIds,
+    };
+  });
 }
 
 function normalizeOperations(value: unknown): DiagramOperation[] {
@@ -188,6 +220,29 @@ function normalizeOperations(value: unknown): DiagramOperation[] {
           nodeId: requiredString(operation.nodeId, 'nodeId'),
           patch: normalizeNodePatch(operation.patch),
         };
+      case 'move_node':
+        return {
+          ...base,
+          type,
+          nodeId: requiredString(operation.nodeId, 'nodeId'),
+          position: normalizePosition(operation.position),
+        };
+      case 'set_relative_position':
+        return {
+          ...base,
+          type,
+          nodeId: requiredString(operation.nodeId, 'nodeId'),
+          referenceNodeId: requiredString(operation.referenceNodeId, 'referenceNodeId'),
+          relation: normalizeSpatialRelation(operation.relation),
+          ...(Number.isFinite(operation.gap) ? { gap: Number(operation.gap) } : {}),
+        };
+      case 'align_nodes':
+        return {
+          ...base,
+          type,
+          nodeIds: normalizeNodeIds(operation.nodeIds),
+          axis: normalizeAlignmentAxis(operation.axis),
+        };
       case 'create_edge':
         return { ...base, type, edge: normalizeOperationEdge(operation.edge, index) };
       case 'delete_edge':
@@ -198,6 +253,14 @@ function normalizeOperations(value: unknown): DiagramOperation[] {
           type,
           edgeId: requiredString(operation.edgeId, 'edgeId'),
           patch: normalizeEdgePatch(operation.patch),
+        };
+      case 'set_edge_endpoints':
+        return {
+          ...base,
+          type,
+          edgeId: requiredString(operation.edgeId, 'edgeId'),
+          from: requiredString(operation.from, 'from'),
+          to: requiredString(operation.to, 'to'),
         };
       case 'insert_node_after':
         return {
@@ -248,6 +311,35 @@ function normalizeNodePatch(value: unknown): Partial<DiagramNode> {
       : {}),
     ...(style ? { style } : {}),
   };
+}
+
+function normalizePosition(value: unknown): { x: number; y: number } {
+  const position = record(value);
+  if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) {
+    throw new Error('AI Operation 的 position 必须包含有效的 x 和 y。');
+  }
+  return { x: Number(position.x), y: Number(position.y) };
+}
+
+function normalizeSpatialRelation(value: unknown): SpatialRelation {
+  if (!SPATIAL_RELATIONS.includes(value as SpatialRelation)) {
+    throw new Error('AI Operation 的 relation 不受支持。');
+  }
+  return value as SpatialRelation;
+}
+
+function normalizeAlignmentAxis(value: unknown): AlignmentAxis {
+  if (!ALIGNMENT_AXES.includes(value as AlignmentAxis)) {
+    throw new Error('AI Operation 的 axis 不受支持。');
+  }
+  return value as AlignmentAxis;
+}
+
+function normalizeNodeIds(value: unknown): string[] {
+  if (!Array.isArray(value)) throw new Error('AI Operation 的 nodeIds 必须是数组。');
+  const nodeIds = value.map((id) => requiredString(id, 'nodeIds'));
+  if (nodeIds.length < 2) throw new Error('AI Operation 的 nodeIds 至少包含两个节点。');
+  return nodeIds;
 }
 
 function normalizeEdgePatch(value: unknown): Partial<DiagramEdge> {

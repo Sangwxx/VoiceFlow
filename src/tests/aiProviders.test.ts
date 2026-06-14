@@ -1,63 +1,36 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 
 import {
   createConfiguredAiProvider,
-  MockAiProvider,
   OpenAiCompatibleProvider,
+  UnconfiguredAiProvider,
 } from '../commands/agent/aiProviders';
 
 describe('AI providers', () => {
-  it('returns deterministic mock diagrams and clarification', async () => {
-    const provider = new MockAiProvider();
-    await expect(
-      provider.complete({
-        intent: 'create_architecture',
-        originalCommand: '画系统架构图',
-        conversation: [],
-      }),
-    ).resolves.toMatchObject({ kind: 'diagram' });
-    await expect(
-      provider.complete({
-        intent: 'create_flowchart',
-        originalCommand: '画点东西',
-        conversation: [],
-      }),
-    ).resolves.toMatchObject({ kind: 'clarification' });
-    await expect(
-      provider.complete({
-        intent: 'create_flowchart',
-        originalCommand: '生成一张强化学习的学习流程图',
-        conversation: [],
-      }),
-    ).resolves.toMatchObject({
-      kind: 'diagram',
-      diagram: { title: '强化学习学习流程' },
+  it('returns an explicit unconfigured provider instead of falling back', async () => {
+    const provider = createConfiguredAiProvider({
+      baseUrl: '',
+      apiKey: '',
+      model: '',
     });
+    expect(provider).toBeInstanceOf(UnconfiguredAiProvider);
+    await expect(
+      provider.complete({
+        intent: 'create_diagram',
+        originalCommand: '画流程图',
+        conversation: [],
+      }),
+    ).rejects.toThrow('真实 AI 尚未配置');
   });
 
-  it('corrects common speech recognition errors in Mock mode', async () => {
-    const provider = new MockAiProvider();
-    await expect(
-      provider.interpretCommand({
-        transcript: '声成一张强化学西的流成图',
-        recentCommands: [],
-        diagramTitle: '当前图',
-        nodeLabels: [],
-      }),
-    ).resolves.toMatchObject({
-      correctedText: '生成一张强化学习的流程图',
-    });
-  });
-
-  it('allows recording mode to force the deterministic Mock provider', () => {
+  it('creates a real provider only when all configuration exists', () => {
     expect(
       createConfiguredAiProvider({
-        mode: 'mock',
         baseUrl: 'https://example.test/v1',
         apiKey: 'secret',
         model: 'real-model',
       }),
-    ).toBeInstanceOf(MockAiProvider);
+    ).toBeInstanceOf(OpenAiCompatibleProvider);
   });
 
   it('sends an OpenAI-compatible request and surfaces HTTP errors', async () => {
@@ -74,7 +47,7 @@ describe('AI providers', () => {
       fetchImpl,
     });
     await provider.complete({
-      intent: 'create_flowchart',
+      intent: 'create_diagram',
       originalCommand: '画流程图',
       conversation: [],
     });
@@ -82,43 +55,55 @@ describe('AI providers', () => {
       'https://example.test/v1/chat/completions',
       expect.objectContaining({ method: 'POST' }),
     );
+    const request = fetchImpl.mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(request.body as string);
+    expect(body).not.toHaveProperty('temperature');
+    expect(body.messages[0].content).toContain(
+      '根据用户主题规划准确、完整且有针对性的结构图',
+    );
+    expect(body.messages[0].content).toContain(
+      '不要使用“核心概念、方法与工具、实践应用”等通用占位词',
+    );
 
     const failing = new OpenAiCompatibleProvider({
       baseUrl: 'https://example.test/v1',
       apiKey: 'secret',
       model: 'demo',
-      fetchImpl: vi.fn().mockResolvedValue({ ok: false, status: 500 }),
+      fetchImpl: vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: { message: 'invalid model parameter' } }),
+      }),
     });
     await expect(
       failing.complete({
-        intent: 'create_flowchart',
+        intent: 'create_diagram',
         originalCommand: '画流程图',
         conversation: [],
       }),
-    ).rejects.toThrow('HTTP 500');
+    ).rejects.toThrow('HTTP 400 - invalid model parameter');
   });
 
-  it('calls the browser fetch function without an illegal receiver binding', async () => {
-    const browserFetch = vi.fn().mockResolvedValue({
+  it('enables JSON mode for Moonshot without imposing it on other providers', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({
-        choices: [{ message: { content: '{"kind":"clarification","question":"补充"}' } }],
-      }),
+      json: async () => ({ choices: [{ message: { content: '{}' } }] }),
     });
-    vi.stubGlobal('fetch', browserFetch);
     const provider = new OpenAiCompatibleProvider({
-      baseUrl: 'https://api.openai.com/v1',
+      baseUrl: 'https://api.moonshot.cn/v1',
       apiKey: 'secret',
-      model: 'gpt-4.1-mini',
+      model: 'moonshot-v1-auto',
+      fetchImpl,
     });
-
     await provider.complete({
-      intent: 'create_flowchart',
-      originalCommand: '画流程图',
+      intent: 'create_diagram',
+      originalCommand: '画一个学习流程',
       conversation: [],
     });
-
-    expect(browserFetch).toHaveBeenCalledOnce();
-    vi.unstubAllGlobals();
+    const request = fetchImpl.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(request.body as string)).toMatchObject({
+      response_format: { type: 'json_object' },
+      thinking: { type: 'disabled' },
+    });
   });
 });

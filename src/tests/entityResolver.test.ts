@@ -46,4 +46,19 @@ describe('entityResolver', () => {
       suggestions: expect.arrayContaining([expect.objectContaining({ id: 'home' })]),
     });
   });
+
+  it('resolves temporary object numbers to the matching object kind', () => {
+    expect(resolveNode(loginFlowDiagram, '物体1')).toMatchObject({
+      status: 'found',
+      item: { id: loginFlowDiagram.nodes[0].id },
+      confidence: 1,
+    });
+    expect(
+      resolveEdge(loginFlowDiagram, `物体${loginFlowDiagram.nodes.length + 1}`),
+    ).toMatchObject({
+      status: 'found',
+      item: { id: loginFlowDiagram.edges[0].id },
+      confidence: 1,
+    });
+  });
 });

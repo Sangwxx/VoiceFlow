@@ -20,7 +20,9 @@ export interface VoiceProvider {
 export type VoiceController = {
   startListening(): void;
   stopListening(): void;
-  handleFinalTranscript(text: string): Promise<void>;
+  handleFinalTranscript(
+    text: string,
+  ): Promise<import('../commands/fast/fastCommandExecutor').FastCommandExecutionResult>;
   finishUtterance(): Promise<void>;
   pauseForFeedback(): void;
   resumeAfterFeedback(): void;

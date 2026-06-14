@@ -40,21 +40,88 @@ describe('routeCommand', () => {
       route: 'agent',
       agentIntent: 'modify_diagram',
     });
+    expect(routeCommand('箭头是三角形指向圆形')).toMatchObject({
+      route: 'agent',
+      agentIntent: 'modify_diagram',
+    });
+    expect(routeCommand('圆形在三角形左边')).toMatchObject({
+      route: 'agent',
+      agentIntent: 'modify_diagram',
+    });
+    expect(routeCommand('让圆形和三角形水平对齐')).toMatchObject({
+      route: 'agent',
+      agentIntent: 'modify_diagram',
+    });
   });
 
-  it('classifies flowchart and architecture Agent intents', () => {
+  it('routes all complete structural diagrams through one generic Agent intent', () => {
     expect(routeCommand('画一个完整登录流程图')).toMatchObject({
       route: 'agent',
-      agentIntent: 'create_flowchart',
+      agentIntent: 'create_diagram',
     });
     expect(routeCommand('生成一个订单系统架构图')).toMatchObject({
       route: 'agent',
-      agentIntent: 'create_architecture',
+      agentIntent: 'create_diagram',
     });
-    expect(routeCommand('确认')).toMatchObject({ route: 'fast', fastCommand: 'confirm' });
+    expect(routeCommand('确认')).toMatchObject({ route: 'unknown' });
     expect(routeCommand('生成一张强化学习的学习流程图')).toMatchObject({
       route: 'agent',
-      agentIntent: 'create_flowchart',
+      agentIntent: 'create_diagram',
+    });
+    expect(routeCommand('画一个学生选课用例图')).toMatchObject({
+      route: 'agent',
+      agentIntent: 'create_diagram',
+    });
+    expect(routeCommand('生成公司组织结构图')).toMatchObject({
+      route: 'agent',
+      agentIntent: 'create_diagram',
+    });
+    expect(routeCommand('做一个功能对比表格')).toMatchObject({
+      route: 'agent',
+      agentIntent: 'create_diagram',
+    });
+  });
+
+  it('keeps basic shapes local and routes broad learning flows to Agent', () => {
+    expect(routeCommand('画一个正方形')).toMatchObject({
+      route: 'simple',
+      simpleIntent: 'create_node',
+    });
+    expect(routeCommand('画两个圆形和一个三角形')).toMatchObject({
+      route: 'simple',
+      simpleIntent: 'create_node',
+    });
+    expect(routeCommand('帮我生成一个圆形和一个正方形')).toMatchObject({
+      route: 'simple',
+      simpleIntent: 'create_node',
+    });
+    expect(routeCommand('放置一个三角形')).toMatchObject({
+      route: 'simple',
+      simpleIntent: 'create_node',
+    });
+    expect(routeCommand('生成一条线')).toMatchObject({
+      route: 'simple',
+      simpleIntent: 'create_edge',
+    });
+    expect(routeCommand('把5号圆形上的文字改成学校')).toMatchObject({
+      route: 'simple',
+      simpleIntent: 'update_node_text',
+    });
+    expect(routeCommand('复制物体1')).toMatchObject({
+      route: 'simple',
+      simpleIntent: 'duplicate_node',
+    });
+    expect(routeCommand('把物体2放大')).toMatchObject({
+      route: 'simple',
+      simpleIntent: 'resize_node',
+    });
+    expect(routeCommand('画一个高中数据的学习流程')).toMatchObject({
+      route: 'agent',
+      agentIntent: 'create_diagram',
+    });
+    expect(routeCommand('帮我梳理一个机器学习路径')).toMatchObject({
+      route: 'agent',
+      agentIntent: 'create_diagram',
     });
   });
 

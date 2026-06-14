@@ -35,7 +35,7 @@ Web Speech API
 
 - `diagramStore`: committed Diagram, undo/redo history and programmatic selection.
 - `proposalStore`: uncommitted Diagram preview and optional validated Operation batch shared by Agent and Workflow paths.
-- `versionStore`: named and automatic snapshots persisted in `localStorage`.
+- `versionStore`: only explicitly voice-saved named snapshots persisted in `localStorage`.
 - `voiceStore`: recognition and pause state.
 - `commandStore`: route result, execution log and Simple clarification.
 - `agentStore`: AI request, provider and clarification state.
@@ -46,13 +46,15 @@ Web Speech API
 ## Safety Boundaries
 
 - Fast Path commands bypass AI and expose measured execution latency in the UI.
-- Semantic correction uses confidence tiers: high confidence executes, medium confidence
-  waits for voice confirmation, and low confidence asks the user to restate.
+- ASR calibration is synchronous and local. It combines domain terms, error mappings,
+  phonetic similarity, edit distance, command aliases, current Diagram labels and recent
+  commands. Candidate competition, score margins and overlap resolution prevent aggressive
+  replacements as the lexicon grows.
 - Ambiguous targets are displayed as visual candidates and remain voice-selectable only.
 - Diagram and Operation runtime validators reject invalid graph structures.
 - Contextual Agent requests receive the current Diagram and recent command context, but may only
   return whitelisted Operations. The complete batch is executed against a clone before preview.
 - Failed Agent, Workflow, export or clarification actions leave the committed Diagram unchanged.
 - Confirmation creates one undoable history entry.
-- Real AI failures do not silently fall back to Mock AI.
+- Real AI failures and missing configuration never silently fall back to generated demo data.
 - Browser-exposed AI keys are suitable only for local demonstrations.

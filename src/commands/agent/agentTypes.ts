@@ -1,7 +1,7 @@
 import type { Diagram } from '../../core/diagram/diagramTypes';
 import type { DiagramOperation } from '../../core/operations/operationTypes';
 
-export type AgentIntent = 'create_flowchart' | 'create_architecture' | 'modify_diagram';
+export type AgentIntent = 'create_diagram' | 'modify_diagram';
 
 export type AgentStatus =
   | 'idle'
@@ -22,20 +22,8 @@ export type AgentRequest = {
   originalCommand: string;
   conversation: AgentConversationTurn[];
   currentDiagram?: Diagram;
+  spatialSummary?: string;
   recentCommands?: string[];
-};
-
-export type SemanticInterpretationRequest = {
-  transcript: string;
-  recentCommands: string[];
-  diagramTitle: string;
-  nodeLabels: string[];
-};
-
-export type SemanticInterpretationResult = {
-  correctedText: string;
-  confidence: number;
-  reason: string;
 };
 
 export type AgentPlanResult =
@@ -59,11 +47,7 @@ export type AgentPlanResult =
     };
 
 export interface AiProvider {
-  readonly mode: 'mock' | 'real';
+  readonly mode: 'real' | 'unconfigured';
   readonly model: string;
   complete(request: AgentRequest, options?: { signal?: AbortSignal }): Promise<unknown>;
-  interpretCommand?(
-    request: SemanticInterpretationRequest,
-    options?: { signal?: AbortSignal },
-  ): Promise<SemanticInterpretationResult>;
 }

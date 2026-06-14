@@ -7,7 +7,7 @@ import { validateDiagram } from '../core/diagram/diagramValidators';
 export type DiagramVersion = {
   id: string;
   name: string;
-  kind: 'manual' | 'automatic';
+  kind: 'manual' | 'auto';
   sourceAction: string;
   createdAt: string;
   diagram: Diagram;
@@ -40,7 +40,7 @@ function isDiagramVersion(item: unknown): item is DiagramVersion {
     version.id &&
     typeof version.name === 'string' &&
     version.name.trim() &&
-    (version.kind === 'manual' || version.kind === 'automatic') &&
+    (version.kind === 'manual' || version.kind === 'auto') &&
     typeof version.sourceAction === 'string' &&
     typeof version.createdAt === 'string' &&
     version.diagram &&
@@ -70,17 +70,7 @@ function persist(versions: DiagramVersion[]): string | null {
 }
 
 function trimVersions(versions: DiagramVersion[]): DiagramVersion[] {
-  const next = [...versions];
-  while (next.length > MAX_VERSIONS) {
-    const oldestAutomatic = [...next]
-      .reverse()
-      .findIndex((version) => version.kind === 'automatic');
-    next.splice(
-      oldestAutomatic >= 0 ? next.length - 1 - oldestAutomatic : next.length - 1,
-      1,
-    );
-  }
-  return next;
+  return versions.slice(0, MAX_VERSIONS);
 }
 
 export type VersionStoreState = {

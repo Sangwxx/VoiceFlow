@@ -6,11 +6,11 @@ import { useDiagramStore } from '../stores/diagramStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import { MockVoiceProvider } from '../voice/mockVoiceProvider';
 import { createVoiceController } from '../voice/voiceController';
-import { createDiagramProposal, useProposalStore } from '../stores/proposalStore';
+import { useProposalStore } from '../stores/proposalStore';
 import { useVersionStore } from '../stores/versionStore';
 import { useWorkflowStore } from '../stores/workflowStore';
 import { useCanvasViewStore } from '../stores/canvasViewStore';
-import { MockAiProvider } from '../commands/agent/aiProviders';
+import { UnconfiguredAiProvider } from '../commands/agent/aiProviders';
 import { useAgentStore } from '../stores/agentStore';
 
 const speechFeedback: SpeechFeedbackService = {
@@ -22,7 +22,28 @@ function createTestController(provider: MockVoiceProvider) {
   return createVoiceController({
     provider,
     speechFeedback,
-    aiProvider: new MockAiProvider(),
+    aiProvider: new UnconfiguredAiProvider(),
+  });
+}
+
+function createClarifyingController(provider: MockVoiceProvider) {
+  let calls = 0;
+  return createVoiceController({
+    provider,
+    speechFeedback,
+    aiProvider: {
+      mode: 'real',
+      model: 'test-model',
+      complete: vi.fn().mockImplementation(() => {
+        calls += 1;
+        return calls === 1
+          ? { kind: 'clarification', question: '你要修改哪个节点？' }
+          : {
+              kind: 'operations',
+              operations: [{ type: 'apply_layout', direction: 'left_to_right' }],
+            };
+      }),
+    },
   });
 }
 
@@ -91,6 +112,36 @@ describe('voiceController integration', () => {
     });
   });
 
+  it('treats the next voice command as the answer to an Agent question', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createClarifyingController(provider);
+
+    await controller.handleFinalTranscript('把当前图整理一下');
+    expect(useAgentStore.getState()).toMatchObject({
+      status: 'clarifying',
+      clarificationQuestion: '你要修改哪个节点？',
+    });
+
+    await controller.handleFinalTranscript('全部节点');
+
+    expect(useDiagramStore.getState().diagram.layout.direction).toBe('left_to_right');
+    expect(useAgentStore.getState().status).toBe('idle');
+  });
+
+  it('clears a stale recognition network error when a new result arrives', () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+
+    controller.startListening();
+    provider.emitError(new Error('语音识别网络连接失败。'));
+    expect(useVoiceStore.getState().error).toBe('语音识别网络连接失败。');
+
+    provider.emitInterim('生成一个最简单的流程图');
+
+    expect(useVoiceStore.getState().error).toBeNull();
+    expect(useVoiceStore.getState().interimTranscript).toBe('生成一个最简单的流程图');
+  });
+
   it('executes a complete low-risk interim task while speech continues', async () => {
     const provider = new MockVoiceProvider();
     const controller = createTestController(provider);
@@ -105,6 +156,32 @@ describe('voiceController integration', () => {
         status: 'completed',
       });
     });
+  });
+
+  it('locally calibrates an interim task before immediate execution', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+
+    controller.startListening();
+    provider.emitInterim('横向布橘，然后我继续说');
+
+    await vi.waitFor(() => {
+      expect(useDiagramStore.getState().diagram.layout.direction).toBe('left_to_right');
+    });
+    expect(useVoiceStore.getState().correctedTranscript).toBe('横向布局，然后我继续说');
+  });
+
+  it('corrects a homophone node target before executing a voice rename', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+    await controller.handleFinalTranscript('画一个圆形和正方形');
+
+    await controller.handleFinalTranscript('把原型上的文字改成学校');
+
+    expect(useVoiceStore.getState().correctedTranscript).toBe('把圆形上的文字改成学校');
+    expect(
+      useDiagramStore.getState().diagram.nodes.find((node) => node.label === '学校'),
+    ).toBeDefined();
   });
 
   it('keeps strict order when a complex task precedes an immediate task', async () => {
@@ -138,7 +215,73 @@ describe('voiceController integration', () => {
     ]);
   });
 
-  it('pauses the ordered queue for confirmation and resumes after the answer', async () => {
+  it('keeps comma-separated shape placement clauses as one queued task', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+
+    controller.startListening();
+    provider.emitFinal('画一个正方形，放左边，圆形，放右边');
+
+    expect(useVoiceStore.getState().taskQueue).toHaveLength(1);
+    expect(useVoiceStore.getState().taskQueue[0]).toMatchObject({
+      text: '画一个正方形，放左边，圆形，放右边',
+      readiness: 'after_recording',
+    });
+  });
+
+  it('merges multiple final recognition fragments from one complex utterance', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+
+    controller.startListening();
+    provider.emitFinal('帮我生成一个圆形和一个正方形');
+    provider.emitFinal('正方形放在左边圆形放在右边');
+
+    expect(useVoiceStore.getState().taskQueue).toHaveLength(1);
+    expect(useVoiceStore.getState().taskQueue[0]).toMatchObject({
+      text: '帮我生成一个圆形和一个正方形，正方形放在左边圆形放在右边',
+      status: 'waiting_recording_end',
+      route: { route: 'simple' },
+    });
+
+    provider.emitSilence();
+    await vi.waitFor(() => {
+      const diagram = useDiagramStore.getState().diagram;
+      expect(diagram.nodes).toHaveLength(2);
+      expect(
+        diagram.nodes.find((node) => node.label === '正方形')!.position!.x,
+      ).toBeLessThan(diagram.nodes.find((node) => node.label === '圆形')!.position!.x);
+    });
+  });
+
+  it('does not merge explicitly separated complex tasks from one final result', () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+
+    controller.startListening();
+    provider.emitFinal('加一个节点叫审核然后加一个节点叫归档');
+
+    expect(useVoiceStore.getState().taskQueue.map((task) => task.text)).toEqual([
+      '加一个节点叫审核',
+      '加一个节点叫归档',
+    ]);
+  });
+
+  it('does not merge complex final fragments after an explicit trailing boundary', () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+
+    controller.startListening();
+    provider.emitFinal('加一个节点叫审核然后');
+    provider.emitFinal('加一个节点叫归档');
+
+    expect(useVoiceStore.getState().taskQueue.map((task) => task.text)).toEqual([
+      '加一个节点叫审核',
+      '加一个节点叫归档',
+    ]);
+  });
+
+  it('applies workflow changes and continues the ordered queue without confirmation', async () => {
     const provider = new MockVoiceProvider();
     const controller = createTestController(provider);
 
@@ -146,22 +289,24 @@ describe('voiceController integration', () => {
     provider.emitFinal('整理成适合汇报的版本，然后横向布局');
     provider.emitSilence();
     await vi.waitFor(() => {
-      expect(useProposalStore.getState().proposal?.source).toBe('report_mode');
-    });
-    expect(useDiagramStore.getState().diagram.layout.direction).toBe('top_down');
-
-    controller.startListening();
-    provider.emitFinal('确认');
-    expect(useVoiceStore.getState().taskQueue.map((task) => task.text)).toEqual([
-      '整理成适合汇报的版本',
-      '确认',
-      '横向布局',
-    ]);
-    provider.emitSilence();
-    await vi.waitFor(() => {
       expect(useProposalStore.getState().proposal).toBeNull();
       expect(useDiagramStore.getState().diagram.layout.direction).toBe('left_to_right');
+      expect(useVoiceStore.getState().taskQueue.map((task) => task.status)).toEqual([
+        'completed',
+        'completed',
+      ]);
     });
+  });
+
+  it('marks a repeated canvas modification as no_change instead of completed', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+    controller.startListening();
+    provider.emitInterim('纵向布局，然后继续');
+    await vi.waitFor(() => {
+      expect(useVoiceStore.getState().taskQueue[0]?.status).toBe('no_change');
+    });
+    expect(useDiagramStore.getState().past).toHaveLength(0);
   });
 
   it('ignores recognition results that arrive after listening stops', async () => {
@@ -178,7 +323,7 @@ describe('voiceController integration', () => {
     expect(useCommandStore.getState().executionLog).toHaveLength(0);
   });
 
-  it('executes Simple Path commands and handles clarification answers', async () => {
+  it('executes Simple Path commands with deterministic target selection', async () => {
     const provider = new MockVoiceProvider();
     const controller = createTestController(provider);
 
@@ -189,14 +334,14 @@ describe('voiceController integration', () => {
     ).toBe(true);
 
     await controller.handleFinalTranscript('把失败分支改成红色虚线');
-    expect(useCommandStore.getState().pendingClarification).not.toBeNull();
-
-    await controller.handleFinalTranscript('第二个');
     expect(useCommandStore.getState().pendingClarification).toBeNull();
     expect(
-      useDiagramStore.getState().diagram.edges.find((edge) => edge.label === '失败')
-        ?.type,
-    ).toBe('dashed');
+      useDiagramStore
+        .getState()
+        .diagram.edges.some(
+          (edge) => edge.type === 'dashed' && edge.style?.stroke === '#ff4d4f',
+        ),
+    ).toBe(true);
     expect(useCommandStore.getState().executionLog[0]).toMatchObject({
       route: 'simple',
       simpleIntent: 'update_edge_style',
@@ -204,152 +349,99 @@ describe('voiceController integration', () => {
     });
   });
 
-  it('allows Fast Path cancel to clear a pending clarification', async () => {
+  it('applies a stage 5 report workflow directly by voice', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+    await controller.handleFinalTranscript('整理成适合汇报的版本');
+    expect(useProposalStore.getState().proposal).toBeNull();
+    expect(useDiagramStore.getState().diagram.theme.name).toBe('report_clean');
+    expect(useVersionStore.getState().versions).toHaveLength(0);
+  });
+
+  it('uses local calibration before giving up on an unknown transcript', async () => {
+    const provider = new MockVoiceProvider();
+    const complete = vi.fn().mockResolvedValue({
+      kind: 'diagram',
+      summary: '强化学习流程',
+      diagram: {
+        ...structuredClone(useDiagramStore.getState().diagram),
+        title: '强化学习学习流程',
+      },
+    });
+    const controller = createVoiceController({
+      provider,
+      speechFeedback,
+      aiProvider: { mode: 'real', model: 'test-model', complete },
+    });
+    await controller.handleFinalTranscript('声成一张强化学西的流成图');
+    expect(useVoiceStore.getState().correctedTranscript).toBe('生成一张强化学习的流程图');
+    expect(useDiagramStore.getState().diagram.title).toBe('强化学习学习流程');
+    expect(complete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        originalCommand: '生成一张强化学习的流程图',
+        intent: 'create_diagram',
+      }),
+      expect.any(Object),
+    );
+    expect(useVoiceStore.getState().correctionFeedback?.reason).toContain('错词映射');
+  });
+
+  it('corrects the transcript before asking AI to generate a matching use case diagram', async () => {
+    const provider = new MockVoiceProvider();
+    const complete = vi.fn().mockResolvedValue({
+      kind: 'diagram',
+      title: '学生选课用例图',
+      diagramType: 'usecase',
+      nodes: [
+        { id: 'student', label: '学生', type: 'user' },
+        { id: 'select', label: '选择课程', type: 'process' },
+      ],
+      edges: [{ from: 'student', to: 'select' }],
+    });
+    const controller = createVoiceController({
+      provider,
+      speechFeedback,
+      aiProvider: { mode: 'real', model: 'test-model', complete },
+    });
+
+    await controller.handleFinalTranscript('画一个学生选课用力图');
+
+    expect(complete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        originalCommand: '画一个学生选课用例图',
+        intent: 'create_diagram',
+      }),
+      expect.any(Object),
+    );
+    expect(useDiagramStore.getState().diagram).toMatchObject({
+      title: '学生选课用例图',
+      diagramType: 'usecase',
+    });
+  });
+
+  it('applies a generated structural diagram and continues later voice tasks', async () => {
     const provider = new MockVoiceProvider();
     const controller = createTestController(provider);
 
     controller.startListening();
-    await controller.handleFinalTranscript('把失败分支改成红色虚线');
-    expect(useCommandStore.getState().pendingClarification).not.toBeNull();
-
-    await controller.handleFinalTranscript('取消');
-    expect(useCommandStore.getState().pendingClarification).toBeNull();
-  });
-
-  it('previews and confirms a stage 5 report workflow by voice', async () => {
-    const provider = new MockVoiceProvider();
-    const controller = createTestController(provider);
-    const originalTheme = useDiagramStore.getState().diagram.theme.name;
-
-    await controller.handleFinalTranscript('整理成适合汇报的版本');
-    expect(useProposalStore.getState().proposal?.source).toBe('report_mode');
-    expect(useDiagramStore.getState().diagram.theme.name).toBe(originalTheme);
-
-    await controller.handleFinalTranscript('确认');
-    expect(useProposalStore.getState().proposal).toBeNull();
-    expect(useDiagramStore.getState().diagram.theme.name).toBe('report_clean');
-    expect(useVersionStore.getState().versions[0].name).toBe('汇报美化前');
-  });
-
-  it('uses semantic correction before giving up on an unknown transcript', async () => {
-    const provider = new MockVoiceProvider();
-    const controller = createTestController(provider);
-    await controller.handleFinalTranscript('声成一张强化学西的流成图');
-    expect(useVoiceStore.getState().correctedTranscript).toBe('生成一张强化学习的流程图');
-    expect(useProposalStore.getState().proposal?.diagram.title).toBe('强化学习学习流程');
-    expect(useVoiceStore.getState().correctionFeedback?.confidence).toBe(0.82);
-  });
-
-  it('waits for confirmation before executing a medium-confidence correction', async () => {
-    const provider = new MockVoiceProvider();
-    const controller = createVoiceController({
-      provider,
-      speechFeedback,
-      aiProvider: {
-        mode: 'real',
-        model: 'test-model',
-        complete: vi.fn(),
-        interpretCommand: vi.fn().mockResolvedValue({
-          correctedText: '横向布局',
-          confidence: 0.6,
-          reason: '结合当前绘图上下文修正',
-        }),
-      },
+    provider.emitFinal('画一个学生选课用力图，然后纵向布局');
+    provider.emitSilence();
+    await vi.waitFor(() => {
+      expect(useProposalStore.getState().proposal).toBeNull();
+      expect(useDiagramStore.getState().diagram).toMatchObject({
+        title: '学生选课用例图',
+        diagramType: 'usecase',
+        layout: { direction: 'top_down' },
+      });
+      expect(
+        useVoiceStore.getState().taskQueue.every((task) => task.status === 'completed'),
+      ).toBe(true);
     });
-
-    await controller.handleFinalTranscript('横像布橘');
-    expect(useDiagramStore.getState().diagram.layout.direction).toBe('top_down');
-    expect(useVoiceStore.getState().pendingCorrection).toMatchObject({
-      correctedText: '横向布局',
-      confidence: 0.6,
-    });
-
-    await controller.handleFinalTranscript('确认');
-    expect(useVoiceStore.getState().pendingCorrection).toBeNull();
-    expect(useDiagramStore.getState().diagram.layout.direction).toBe('left_to_right');
   });
 
-  it('cancels a medium-confidence correction without confirming a proposal', async () => {
-    const provider = new MockVoiceProvider();
-    const controller = createVoiceController({
-      provider,
-      speechFeedback,
-      aiProvider: {
-        mode: 'real',
-        model: 'test-model',
-        complete: vi.fn(),
-        interpretCommand: vi.fn().mockResolvedValue({
-          correctedText: '横向布局',
-          confidence: 0.6,
-          reason: '结合当前绘图上下文修正',
-        }),
-      },
-    });
-
-    await controller.handleFinalTranscript('横像布橘');
-    await controller.handleFinalTranscript('取消');
-
-    expect(useVoiceStore.getState().pendingCorrection).toBeNull();
-    expect(useDiagramStore.getState().diagram.layout.direction).toBe('top_down');
-  });
-
-  it('confirms a pending correction without confirming a diagram proposal', async () => {
-    const provider = new MockVoiceProvider();
-    const controller = createVoiceController({
-      provider,
-      speechFeedback,
-      aiProvider: {
-        mode: 'real',
-        model: 'test-model',
-        complete: vi.fn(),
-        interpretCommand: vi.fn().mockResolvedValue({
-          correctedText: '横向布局',
-          confidence: 0.6,
-          reason: '结合当前绘图上下文修正',
-        }),
-      },
-    });
-
-    await controller.handleFinalTranscript('横像布橘');
-    const diagram = structuredClone(useDiagramStore.getState().diagram);
-    useProposalStore
-      .getState()
-      .setProposal(createDiagramProposal('demo_scene', diagram, '候选图', '待确认'));
-
-    await controller.handleFinalTranscript('确认');
-
-    expect(useDiagramStore.getState().diagram.layout.direction).toBe('left_to_right');
-    expect(useProposalStore.getState().proposal).not.toBeNull();
-  });
-
-  it('asks the user to restate a low-confidence correction', async () => {
-    const provider = new MockVoiceProvider();
-    const controller = createVoiceController({
-      provider,
-      speechFeedback,
-      aiProvider: {
-        mode: 'real',
-        model: 'test-model',
-        complete: vi.fn(),
-        interpretCommand: vi.fn().mockResolvedValue({
-          correctedText: '横向布局',
-          confidence: 0.3,
-          reason: '只能得到不确定猜测',
-        }),
-      },
-    });
-
-    await controller.handleFinalTranscript('听不清楚的命令');
-
-    expect(useVoiceStore.getState().pendingCorrection).toBeNull();
-    expect(useDiagramStore.getState().diagram.layout.direction).toBe('top_down');
-    expect(useCommandStore.getState().lastMessage).toContain('请重新描述');
-  });
-
-  it('keeps Fast Path commands local without calling AI', async () => {
+  it('never calls AI for local speech calibration', async () => {
     const provider = new MockVoiceProvider();
     const complete = vi.fn();
-    const interpretCommand = vi.fn();
     const controller = createVoiceController({
       provider,
       speechFeedback,
@@ -357,14 +449,30 @@ describe('voiceController integration', () => {
         mode: 'real',
         model: 'test-model',
         complete,
-        interpretCommand,
+      },
+    });
+
+    await controller.handleFinalTranscript('横向布橘');
+    expect(useDiagramStore.getState().diagram.layout.direction).toBe('left_to_right');
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  it('keeps Fast Path commands local without calling AI', async () => {
+    const provider = new MockVoiceProvider();
+    const complete = vi.fn();
+    const controller = createVoiceController({
+      provider,
+      speechFeedback,
+      aiProvider: {
+        mode: 'real',
+        model: 'test-model',
+        complete,
       },
     });
 
     await controller.handleFinalTranscript('撤销');
 
     expect(complete).not.toHaveBeenCalled();
-    expect(interpretCommand).not.toHaveBeenCalled();
     expect(useCommandStore.getState().executionLog[0]).toMatchObject({
       route: 'fast',
       rawText: '撤销',
@@ -399,9 +507,8 @@ describe('voiceController integration', () => {
       }),
       expect.anything(),
     );
-    expect(useProposalStore.getState().proposal?.operations).toHaveLength(1);
     expect(
       useDiagramStore.getState().diagram.nodes.find((node) => node.id === 'login-page'),
-    ).toMatchObject({ label: '进入登录页' });
+    ).toMatchObject({ label: '进入账号登录页' });
   });
 });

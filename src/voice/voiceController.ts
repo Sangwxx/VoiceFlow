@@ -9,15 +9,14 @@ import {
 import { routeCommand } from '../commands/router/commandRouter';
 import { createSimpleCommandExecutor } from '../commands/simple/simpleCommandExecutor';
 import type { SpeechFeedbackService } from '../services/speechFeedbackService';
-import { useAgentStore } from '../stores/agentStore';
 import { useCommandStore } from '../stores/commandStore';
+import { useAgentStore } from '../stores/agentStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import type { VoiceController, VoiceProvider } from './voiceTypes';
 import { createWorkflowCommandExecutor } from '../commands/workflow/workflowCommandExecutor';
-import { useWorkflowStore } from '../stores/workflowStore';
-import { useProposalStore } from '../stores/proposalStore';
 import { useDiagramStore } from '../stores/diagramStore';
 import { VoiceTaskSegmenter, type VoiceTask } from './voiceTaskSegmenter';
+import { calibrateAsrTranscript } from './localAsrCalibrator';
 
 export type VoiceControllerDependencies = {
   provider: VoiceProvider;
@@ -37,7 +36,6 @@ export function createVoiceController({
   let drainRequested = false;
   let taskCursor = 0;
   let tasks: VoiceTask[] = [];
-  const resolutionTaskIds = new Set<string>();
   let suppressFeedback = false;
   const segmenter = new VoiceTaskSegmenter();
   const executionFeedback: SpeechFeedbackService = {
@@ -57,28 +55,21 @@ export function createVoiceController({
 
   function appendTasks(nextTasks: VoiceTask[]): void {
     if (!nextTasks.length) return;
-    if (hasInteractionBlocker()) {
-      nextTasks.forEach((task) => resolutionTaskIds.add(task.id));
-      const insertionIndex =
-        tasks[taskCursor]?.status === 'executing' ? taskCursor + 1 : taskCursor;
-      tasks.splice(insertionIndex, 0, ...nextTasks);
-    } else {
-      tasks.push(...nextTasks);
+    const previous = tasks.at(-1);
+    for (const [index, nextTask] of nextTasks.entries()) {
+      if (index === 0 && shouldMergeFinalFragment(previous, nextTask, utteranceEnded)) {
+        const text = `${previous.text}，${nextTask.text}`;
+        previous.text = text;
+        previous.route = routeCommand(text);
+        previous.source = 'final';
+        previous.readiness = 'after_recording';
+        previous.status = 'waiting_recording_end';
+      } else {
+        tasks.push(nextTask);
+      }
     }
     publishTasks();
     void drainTasks();
-  }
-
-  function hasInteractionBlocker(): boolean {
-    const workflow = useWorkflowStore.getState();
-    return Boolean(
-      useProposalStore.getState().proposal ||
-      useVoiceStore.getState().pendingCorrection ||
-      useCommandStore.getState().pendingClarification ||
-      useAgentStore.getState().status === 'clarifying' ||
-      workflow.pendingVersionClarification ||
-      workflow.pendingFocusClarification,
-    );
   }
 
   async function drainTasks(): Promise<void> {
@@ -92,22 +83,29 @@ export function createVoiceController({
       while (taskCursor < tasks.length) {
         const task = tasks[taskCursor];
         if (task.readiness === 'after_recording' && !utteranceEnded) break;
-        if (hasInteractionBlocker() && !resolutionTaskIds.has(task.id)) break;
         task.status = 'executing';
         publishTasks();
         suppressFeedback = !utteranceEnded;
         try {
-          await controller.handleFinalTranscript(task.text);
-          task.status = 'completed';
+          const result = await controller.handleFinalTranscript(task.text);
+          if (result.status === 'success' && isCanvasMutationTask(task)) {
+            task.status = 'verifying';
+            publishTasks();
+            await Promise.resolve();
+          }
+          task.status =
+            result.status === 'success'
+              ? 'completed'
+              : result.status === 'ignored'
+                ? 'no_change'
+                : 'failed';
         } catch {
           task.status = 'failed';
         } finally {
           suppressFeedback = false;
-          resolutionTaskIds.delete(task.id);
           taskCursor += 1;
           publishTasks();
         }
-        if (hasInteractionBlocker()) break;
       }
     } finally {
       drainingTasks = false;
@@ -146,12 +144,26 @@ export function createVoiceController({
         },
         onResult: ({ text, isFinal }) => {
           if (!shouldListen) return;
+          useVoiceStore.getState().clearError();
+          const calibration = calibrateAsrTranscript(text, {
+            diagram: useDiagramStore.getState().diagram,
+            recentCommands: useCommandStore
+              .getState()
+              .executionLog.slice(0, 8)
+              .map((entry) => entry.rawText),
+          });
           if (isFinal) {
             useVoiceStore.getState().setFinalTranscript(text);
-            appendTasks(segmenter.ingestFinal(text));
+            if (calibration.changed) {
+              useVoiceStore.getState().setCorrectionFeedback(calibration);
+            }
+            appendTasks(segmenter.ingestFinal(calibration.correctedText));
           } else {
             useVoiceStore.getState().setInterimTranscript(text);
-            appendTasks(segmenter.ingestInterim(text));
+            if (calibration.changed) {
+              useVoiceStore.getState().setCorrectionFeedback(calibration);
+            }
+            appendTasks(segmenter.ingestInterim(calibration.correctedText));
           }
         },
         onError: (error) => useVoiceStore.getState().setError(error.message),
@@ -181,148 +193,39 @@ export function createVoiceController({
     },
     async handleFinalTranscript(text: string) {
       const startedAt = performance.now();
-      let executionText = text;
-      let route = routeCommand(text);
-      const pendingCorrection = useVoiceStore.getState().pendingCorrection;
-      if (pendingCorrection) {
-        if (route.fastCommand === 'confirm') {
-          executionText = pendingCorrection.correctedText;
-          route = {
-            ...routeCommand(executionText),
-            rawText: text,
-            reason: `用户确认语义纠错：${pendingCorrection.reason}`,
-          };
-          useVoiceStore.getState().setCorrectionFeedback(pendingCorrection);
-          useVoiceStore.getState().setPendingCorrection(null);
-        } else if (route.fastCommand === 'cancel') {
-          useVoiceStore.getState().setPendingCorrection(null);
-        } else {
-          const message = '当前有待确认的语义纠错，请说确认或取消';
-          useCommandStore.getState().setLastMessage(message);
-          void speechFeedback.speak(message);
-          useCommandStore
-            .getState()
-            .addExecutionLog(
-              createExecutionLog(route, { status: 'ignored', message }, startedAt),
-            );
-          return;
+      if (useAgentStore.getState().status === 'clarifying') {
+        useVoiceStore.getState().setStatus('processing');
+        const result = await agentExecutor.answerClarification(text);
+        const voice = useVoiceStore.getState();
+        if (voice.status !== 'speaking') {
+          voice.setStatus(shouldListen ? 'listening' : 'idle');
         }
+        return result;
       }
-      const pendingSimple = useCommandStore.getState().pendingClarification;
-      const agentClarifying = useAgentStore.getState().status === 'clarifying';
-      const workflowState = useWorkflowStore.getState();
-      const workflowClarifying =
-        workflowState.pendingVersionClarification ??
-        workflowState.pendingFocusClarification;
-      const hasPendingClarification = Boolean(
-        pendingSimple || agentClarifying || workflowClarifying,
-      );
-      if (
-        route.route === 'unknown' &&
-        !hasPendingClarification &&
-        aiProvider.interpretCommand
-      ) {
-        try {
-          const diagram = useDiagramStore.getState().diagram;
-          const interpretation = await aiProvider.interpretCommand({
-            transcript: text,
-            recentCommands: useCommandStore
-              .getState()
-              .executionLog.slice(0, 5)
-              .map((log) => log.rawText),
-            diagramTitle: diagram.title,
-            nodeLabels: diagram.nodes.map((node) => node.label),
-          });
-          const correctedRoute = routeCommand(interpretation.correctedText);
-          if (correctedRoute.route !== 'unknown') {
-            const correction = {
-              originalText: text,
-              correctedText: interpretation.correctedText,
-              confidence: interpretation.confidence,
-              reason: interpretation.reason,
-            };
-            useVoiceStore.getState().setCorrectionFeedback(correction);
-            if (interpretation.confidence >= 0.75) {
-              executionText = interpretation.correctedText;
-              route = {
-                ...correctedRoute,
-                rawText: text,
-                confidence: Math.min(
-                  correctedRoute.confidence,
-                  interpretation.confidence,
-                ),
-                reason: `高置信度语义纠错：${interpretation.reason}`,
-              };
-            } else {
-              const needsConfirmation = interpretation.confidence >= 0.5;
-              const message = needsConfirmation
-                ? `我理解为“${interpretation.correctedText}”，请说确认或取消`
-                : '语音理解置信度较低，请重新描述命令';
-              if (needsConfirmation) {
-                useVoiceStore.getState().setPendingCorrection(correction);
-              }
-              useCommandStore.getState().setRouteResult({
-                ...route,
-                confidence: interpretation.confidence,
-                reason: needsConfirmation
-                  ? `中置信度语义纠错，等待确认：${interpretation.reason}`
-                  : `低置信度语义纠错，请求重述：${interpretation.reason}`,
-              });
-              useCommandStore.getState().setLastMessage(message);
-              void speechFeedback.speak(message);
-              useCommandStore
-                .getState()
-                .addExecutionLog(
-                  createExecutionLog(
-                    route,
-                    { status: 'clarification', message },
-                    startedAt,
-                  ),
-                );
-              return;
-            }
-          }
-        } catch {
-          // Semantic correction is a best-effort fallback; normal routing feedback remains.
-        }
+      const calibration = calibrateAsrTranscript(text, {
+        diagram: useDiagramStore.getState().diagram,
+        recentCommands: useCommandStore
+          .getState()
+          .executionLog.slice(0, 8)
+          .map((entry) => entry.rawText),
+      });
+      const executionText = calibration.correctedText;
+      let route = routeCommand(executionText);
+      if (calibration.changed) {
+        useVoiceStore.getState().setCorrectionFeedback(calibration);
+        route = {
+          ...route,
+          rawText: text,
+          reason: `本地语音校准：${calibration.reason}`,
+        };
       }
-      if (
-        route.route === 'unknown' &&
-        !hasPendingClarification &&
-        aiProvider.mode === 'real'
-      ) {
+      if (route.route === 'unknown') {
         route = {
           ...route,
           route: 'agent',
           confidence: 0.55,
           agentIntent: 'modify_diagram',
           reason: '规则未命中，交由上下文 Agent 判断并澄清',
-        };
-      }
-      if (agentClarifying && route.route !== 'fast') {
-        route = {
-          ...route,
-          route: 'agent',
-          confidence: 0.95,
-          agentIntent: useAgentStore.getState().intent ?? 'create_flowchart',
-          reason: '处理待澄清的 AI 语音回答',
-        };
-      } else if (workflowClarifying && route.route !== 'fast') {
-        route = {
-          ...route,
-          route: 'workflow',
-          confidence: 0.95,
-          workflowIntent:
-            'action' in workflowClarifying ? workflowClarifying.action : 'focus_node',
-          reason: '处理待澄清的工作流选择',
-        };
-      } else if (pendingSimple && route.route !== 'fast') {
-        route = {
-          ...route,
-          route: 'simple',
-          confidence: 0.95,
-          simpleIntent: pendingSimple.draft.intent,
-          reason: '处理待澄清的语音回答',
         };
       }
       useCommandStore.getState().setRouteResult(route);
@@ -333,14 +236,6 @@ export function createVoiceController({
         result = await executeFastCommand(route.fastCommand);
       } else if (useVoiceStore.getState().commandPaused) {
         result = { status: 'ignored', message: '命令执行已暂停，请说继续或取消' };
-      } else if (useProposalStore.getState().proposal) {
-        result = { status: 'ignored', message: '当前候选图等待确认，请说确认或取消' };
-      } else if (agentClarifying) {
-        result = await agentExecutor.answerClarification(executionText);
-      } else if (workflowClarifying) {
-        result = await workflowExecutor.answerClarification(executionText);
-      } else if (pendingSimple) {
-        result = await simpleExecutor.answerClarification(executionText);
       } else if (route.route === 'simple') {
         result = await simpleExecutor.execute(executionText);
       } else if (route.route === 'workflow' && route.workflowIntent) {
@@ -348,10 +243,7 @@ export function createVoiceController({
       } else if (route.route === 'agent' && route.agentIntent) {
         result = await agentExecutor.execute(executionText, route.agentIntent);
       } else {
-        const message =
-          aiProvider.mode === 'mock'
-            ? '没有识别到可执行的命令。当前使用 Mock AI，配置真实大模型后可进行上下文语义纠错'
-            : 'AI 结合上下文后仍无法确定命令，请换一种说法';
+        const message = '本地语音校准后仍无法确定命令，请换一种说法';
         useCommandStore.getState().setLastMessage(message);
         void speechFeedback.speak(message);
         result = { status: 'ignored', message };
@@ -366,6 +258,7 @@ export function createVoiceController({
           shouldListen ? (voice.commandPaused ? 'paused' : 'listening') : 'idle',
         );
       }
+      return result;
     },
     pauseForFeedback() {
       if (!shouldListen) return;
@@ -380,4 +273,35 @@ export function createVoiceController({
     },
   };
   return controller;
+}
+
+function shouldMergeFinalFragment(
+  previous: VoiceTask | undefined,
+  next: VoiceTask,
+  utteranceEnded: boolean,
+): previous is VoiceTask {
+  return Boolean(
+    !utteranceEnded &&
+    previous &&
+    previous.status === 'waiting_recording_end' &&
+    previous.acceptsFinalContinuation === true &&
+    previous.readiness === 'after_recording' &&
+    next.source === 'final' &&
+    next.readiness === 'after_recording',
+  );
+}
+
+function isCanvasMutationTask(task: VoiceTask): boolean {
+  if (task.route.route === 'simple' || task.route.route === 'agent') return true;
+  if (task.route.route === 'workflow') {
+    return !['save_version', 'compare_version', 'focus_node'].includes(
+      task.route.workflowIntent ?? '',
+    );
+  }
+  return (
+    task.route.route === 'fast' &&
+    ['layout_top_down', 'layout_left_to_right', 'apply_layout'].includes(
+      task.route.fastCommand ?? '',
+    )
+  );
 }

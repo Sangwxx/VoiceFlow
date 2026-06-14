@@ -17,7 +17,7 @@ describe('proposal and persistent versions', () => {
     vi.restoreAllMocks();
   });
 
-  it('does not mutate before confirmation and saves an automatic snapshot', () => {
+  it('does not mutate or save a version before or after proposal confirmation', () => {
     const original = structuredClone(useDiagramStore.getState().diagram);
     useProposalStore
       .getState()
@@ -33,10 +33,7 @@ describe('proposal and persistent versions', () => {
     expect(useVersionStore.getState().versions).toHaveLength(0);
     expect(useProposalStore.getState().confirm()).toBe(true);
     expect(useDiagramStore.getState().diagram.theme.name).toBe('report_clean');
-    expect(useVersionStore.getState().versions[0]).toMatchObject({
-      name: '汇报美化前',
-      kind: 'automatic',
-    });
+    expect(useVersionStore.getState().versions).toHaveLength(0);
   });
 
   it('persists, reloads, finds and compares named versions', () => {

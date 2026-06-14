@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { BrowserExportService, safeExportFilename } from '../core/export/exportService';
+import {
+  BrowserExportService,
+  safeExportFilename,
+  shouldIncludeInExport,
+} from '../core/export/exportService';
 import { loginFlowDiagram } from '../mock/loginFlowDiagram';
 import { registerCanvasElement } from '../services/canvasElementService';
 import { registerCanvasViewportApi } from '../services/canvasViewportService';
@@ -48,5 +52,15 @@ describe('export service', () => {
       dataUrl,
       expect.stringMatching(new RegExp(`\\.${format}$`)),
     );
+  });
+
+  it('excludes temporary voice-reference numbers from image exports', () => {
+    const number = document.createElement('span');
+    number.dataset.voiceReference = 'true';
+    const node = document.createElement('div');
+
+    expect(shouldIncludeInExport(number)).toBe(false);
+    expect(shouldIncludeInExport(node)).toBe(true);
+    expect(JSON.stringify(loginFlowDiagram)).not.toContain('temporaryNumber');
   });
 });

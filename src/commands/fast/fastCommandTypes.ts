@@ -10,7 +10,6 @@ export type FastCommandName =
   | 'pause'
   | 'resume'
   | 'cancel'
-  | 'confirm'
   | 'list_versions'
   | 'save_version'
   | 'export_json'
