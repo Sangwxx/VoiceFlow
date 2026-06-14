@@ -105,5 +105,26 @@ describe('AI providers', () => {
       response_format: { type: 'json_object' },
       thinking: { type: 'disabled' },
     });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      '/api/moonshot/v1/chat/completions',
+      expect.any(Object),
+    );
+  });
+
+  it('turns browser fetch failures into an actionable network error', async () => {
+    const provider = new OpenAiCompatibleProvider({
+      baseUrl: 'https://api.moonshot.cn/v1',
+      apiKey: 'secret',
+      model: 'kimi-k2.6',
+      fetchImpl: vi.fn().mockRejectedValue(new TypeError('Failed to fetch')),
+    });
+
+    await expect(
+      provider.complete({
+        intent: 'create_diagram',
+        originalCommand: '画流程图',
+        conversation: [],
+      }),
+    ).rejects.toThrow('请通过 npm run dev 启动本地代理');
   });
 });
