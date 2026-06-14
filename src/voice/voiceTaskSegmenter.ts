@@ -25,8 +25,9 @@ export type VoiceTask = {
   route: RouteResult;
 };
 
-const BOUNDARY_PATTERN =
-  /(?:[。！？；，,;!?]+|然后|接着|随后|并且|最后|再(?=[看放缩改切撤重暂继取确导保加删连画生创整突弱隐显]))/g;
+const STRONG_BOUNDARY_PATTERN =
+  /(?:[。！？；;!?]+|然后|接着|随后|最后|再(?=[看放缩改切撤重暂继取确导保加删连画生创整突弱隐显]))/g;
+const WEAK_BOUNDARY_PATTERN = /[，,]+/g;
 const IMMEDIATE_FAST_COMMANDS = new Set([
   'fit_view',
   'zoom_in',
@@ -94,15 +95,43 @@ export function splitByBoundaries(text: string): {
   complete: string[];
   remainder: string;
 } {
+  const weakMerged = mergeDependentCommaClauses(text);
   const complete: string[] = [];
   let cursor = 0;
-  for (const match of text.matchAll(BOUNDARY_PATTERN)) {
+  for (const match of weakMerged.matchAll(STRONG_BOUNDARY_PATTERN)) {
     const index = match.index ?? 0;
-    const part = text.slice(cursor, index).trim();
+    const part = weakMerged.slice(cursor, index).trim();
     if (part) complete.push(part);
     cursor = index + match[0].length;
   }
-  return { complete, remainder: text.slice(cursor).trim() };
+  return { complete, remainder: weakMerged.slice(cursor).trim() };
+}
+
+function mergeDependentCommaClauses(text: string): string {
+  const parts = text
+    .split(WEAK_BOUNDARY_PATTERN)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length <= 1) return text;
+  const merged: string[] = [parts[0]];
+  for (const part of parts.slice(1)) {
+    if (isIndependentTask(part)) merged.push(part);
+    else merged[merged.length - 1] = `${merged[merged.length - 1]}，${part}`;
+  }
+  return merged.join('然后');
+}
+
+function isIndependentTask(text: string): boolean {
+  const route = routeCommand(text);
+  if (route.route === 'unknown') return false;
+  if (
+    /^(?:放|放在|放到|位于|在|改成|改为|设为|作为|做)(?:左|右|上|下|中|红|蓝|绿|黄|灰)/.test(
+      text,
+    )
+  ) {
+    return false;
+  }
+  return route.confidence >= 0.65;
 }
 
 export function isImmediateTask(route: RouteResult): boolean {

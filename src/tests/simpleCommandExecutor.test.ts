@@ -167,6 +167,18 @@ describe('simpleCommandExecutor', () => {
     });
   });
 
+  it('keeps comma placement clauses together and applies both positions', async () => {
+    const executor = createSimpleCommandExecutor(speechFeedback);
+
+    await executor.execute('画一个正方形，放左边，圆形，放右边');
+
+    const diagram = useDiagramStore.getState().diagram;
+    const square = diagram.nodes.find((node) => node.label === '正方形')!;
+    const circle = diagram.nodes.find((node) => node.label === '圆形')!;
+    expect(square.position!.x).toBeLessThan(circle.position!.x);
+    expect(diagram.nodes).toHaveLength(2);
+  });
+
   it('renames a numbered shape by its visible object number', async () => {
     const executor = createSimpleCommandExecutor(speechFeedback);
     useDiagramStore.getState().reset(createBlankDiagram());

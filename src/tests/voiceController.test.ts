@@ -151,6 +151,20 @@ describe('voiceController integration', () => {
     ]);
   });
 
+  it('keeps comma-separated shape placement clauses as one queued task', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createTestController(provider);
+
+    controller.startListening();
+    provider.emitFinal('画一个正方形，放左边，圆形，放右边');
+
+    expect(useVoiceStore.getState().taskQueue).toHaveLength(1);
+    expect(useVoiceStore.getState().taskQueue[0]).toMatchObject({
+      text: '画一个正方形，放左边，圆形，放右边',
+      readiness: 'after_recording',
+    });
+  });
+
   it('applies workflow changes and continues the ordered queue without confirmation', async () => {
     const provider = new MockVoiceProvider();
     const controller = createTestController(provider);
