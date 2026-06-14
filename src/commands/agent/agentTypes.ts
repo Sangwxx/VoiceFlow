@@ -1,7 +1,8 @@
 import type { Diagram } from '../../core/diagram/diagramTypes';
 import type { DiagramOperation } from '../../core/operations/operationTypes';
+import type { FreeDrawingScene } from '../../core/freeDrawing/freeDrawingTypes';
 
-export type AgentIntent = 'create_diagram' | 'modify_diagram';
+export type AgentIntent = 'create_diagram' | 'modify_diagram' | 'free_drawing';
 
 export type AgentStatus =
   | 'idle'
@@ -22,6 +23,7 @@ export type AgentRequest = {
   originalCommand: string;
   conversation: AgentConversationTurn[];
   currentDiagram?: Diagram;
+  currentFreeDrawingScene?: FreeDrawingScene;
   spatialSummary?: string;
   recentCommands?: string[];
 };

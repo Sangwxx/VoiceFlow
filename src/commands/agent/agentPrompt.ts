@@ -1,6 +1,8 @@
 import type { AgentRequest } from './agentTypes';
+import { buildFreeDrawingPrompt } from '../freeDrawing/freeDrawingPrompt';
 
 export function buildAgentPrompt(request: AgentRequest): string {
+  if (request.intent === 'free_drawing') return buildFreeDrawingPrompt(request);
   const context = request.conversation
     .map((turn) => `${turn.role === 'user' ? '用户' : '系统'}：${turn.content}`)
     .join('\n');

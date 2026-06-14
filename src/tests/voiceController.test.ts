@@ -12,6 +12,8 @@ import { useWorkflowStore } from '../stores/workflowStore';
 import { useCanvasViewStore } from '../stores/canvasViewStore';
 import { UnconfiguredAiProvider } from '../commands/agent/aiProviders';
 import { useAgentStore } from '../stores/agentStore';
+import { useFreeDrawingStore } from '../stores/freeDrawingStore';
+import { useWorkspaceModeStore } from '../stores/workspaceModeStore';
 
 const speechFeedback: SpeechFeedbackService = {
   isSupported: () => true,
@@ -57,6 +59,8 @@ describe('voiceController integration', () => {
     useWorkflowStore.getState().clear();
     useCanvasViewStore.getState().reset();
     useAgentStore.getState().clear();
+    useFreeDrawingStore.getState().reset();
+    useWorkspaceModeStore.getState().setMode('diagram');
     vi.clearAllMocks();
   });
 
@@ -477,6 +481,91 @@ describe('voiceController integration', () => {
       route: 'fast',
       rawText: '撤销',
     });
+  });
+
+  it('draws locally in free drawing mode without calling the diagram Agent', async () => {
+    const complete = vi.fn();
+    const controller = createVoiceController({
+      provider: new MockVoiceProvider(),
+      speechFeedback,
+      aiProvider: { mode: 'real', model: 'test-model', complete },
+    });
+    useWorkspaceModeStore.getState().setMode('free_drawing');
+
+    await expect(
+      controller.handleFinalTranscript('画一个蓝色杯子'),
+    ).resolves.toMatchObject({
+      status: 'success',
+    });
+
+    expect(complete).not.toHaveBeenCalled();
+    expect(
+      useFreeDrawingStore
+        .getState()
+        .scene.objects.some((object) => object.label === '杯把'),
+    ).toBe(true);
+    expect(useDiagramStore.getState().diagram.id).toBe('login-flow');
+  });
+
+  it('uses the configured AI only for unpreset free drawing requests', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      title: '自由画布：太阳',
+      groupLabel: '太阳',
+      objects: [
+        {
+          type: 'circle',
+          label: '太阳主体',
+          cx: 500,
+          cy: 350,
+          radius: 100,
+          fill: '#facc15',
+        },
+      ],
+    });
+    const controller = createVoiceController({
+      provider: new MockVoiceProvider(),
+      speechFeedback,
+      aiProvider: { mode: 'real', model: 'test-model', complete },
+    });
+    useWorkspaceModeStore.getState().setMode('free_drawing');
+
+    await expect(controller.handleFinalTranscript('画一个太阳')).resolves.toMatchObject({
+      status: 'success',
+    });
+    expect(complete).toHaveBeenCalledWith(
+      expect.objectContaining({ intent: 'free_drawing', originalCommand: '画一个太阳' }),
+    );
+    expect(
+      useFreeDrawingStore
+        .getState()
+        .scene.objects.some((object) => object.groupLabel === '太阳'),
+    ).toBe(true);
+  });
+
+  it('switches workspace modes through high-priority local voice commands', async () => {
+    const complete = vi.fn();
+    const controller = createVoiceController({
+      provider: new MockVoiceProvider(),
+      speechFeedback,
+      aiProvider: { mode: 'real', model: 'test-model', complete },
+    });
+
+    await expect(
+      controller.handleFinalTranscript('切换到自由画图模式'),
+    ).resolves.toMatchObject({
+      status: 'success',
+      message: '已切换到自由画图模式',
+    });
+    expect(useWorkspaceModeStore.getState().mode).toBe('free_drawing');
+
+    await expect(controller.handleFinalTranscript('返回专业图表')).resolves.toMatchObject(
+      {
+        status: 'success',
+        message: '已切换到专业图表模式',
+      },
+    );
+    expect(useWorkspaceModeStore.getState().mode).toBe('diagram');
+    expect(complete).not.toHaveBeenCalled();
   });
 
   it('sends unmatched speech to a real contextual Agent with the current diagram', async () => {

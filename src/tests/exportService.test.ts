@@ -36,6 +36,69 @@ describe('export service', () => {
     expect(download).toHaveBeenCalled();
   });
 
+  it('exports the active free drawing document with its own title', async () => {
+    const download = vi.fn();
+    const service = new BrowserExportService({ download });
+    const result = await service.export(
+      {
+        id: 'free-scene',
+        title: '花朵与杯子',
+        width: 1000,
+        height: 700,
+        objects: [],
+        updatedAt: new Date().toISOString(),
+      },
+      'json',
+    );
+
+    expect(result.filename).toContain('花朵与杯子');
+  });
+
+  it('exports free drawing SVG as standalone vector content', async () => {
+    const download = vi.fn();
+    const service = new BrowserExportService({ download });
+    await service.export(
+      {
+        id: 'free-scene',
+        title: '自由杯子',
+        width: 1000,
+        height: 700,
+        objects: [
+          {
+            id: 'cup',
+            type: 'circle',
+            label: '杯子',
+            cx: 500,
+            cy: 350,
+            radius: 100,
+            fill: '#60a5fa',
+          },
+        ],
+        updatedAt: new Date().toISOString(),
+      },
+      'svg',
+    );
+
+    const [dataUrl, filename] = download.mock.calls[0];
+    const svg = decodeURIComponent(String(dataUrl).split(',')[1]);
+    expect(filename).toMatch(/\.svg$/);
+    expect(svg).toContain('<circle');
+    expect(svg).not.toContain('foreignObject');
+  });
+
+  it('exports professional diagram SVG as standalone vector content', async () => {
+    const download = vi.fn();
+    const service = new BrowserExportService({ download });
+    await service.export(loginFlowDiagram, 'svg');
+
+    const [dataUrl, filename] = download.mock.calls[0];
+    const svg = decodeURIComponent(String(dataUrl).split(',')[1]);
+    expect(filename).toMatch(/\.svg$/);
+    expect(svg).toContain('用户登录流程');
+    expect(svg).toContain('marker-end="url(#arrow-');
+    expect(svg).not.toContain('foreignObject');
+  });
+
   it('mounts a browser download link before clicking it', async () => {
     vi.useFakeTimers();
     const click = vi
@@ -54,21 +117,17 @@ describe('export service', () => {
     vi.useRealTimers();
   });
 
-  it.each([
-    ['svg', 'data:image/svg+xml,test'],
-    ['png', 'data:image/png,test'],
-  ] as const)('fits and captures %s', async (format, dataUrl) => {
+  it('fits and captures PNG', async () => {
     const download = vi.fn();
     const service = new BrowserExportService({
       download,
-      captureSvg: vi.fn().mockResolvedValue(dataUrl),
-      capturePng: vi.fn().mockResolvedValue(dataUrl),
+      capturePng: vi.fn().mockResolvedValue('data:image/png,test'),
       wait: vi.fn().mockResolvedValue(undefined),
     });
-    await service.export(loginFlowDiagram, format);
+    await service.export(loginFlowDiagram, 'png');
     expect(download).toHaveBeenCalledWith(
-      dataUrl,
-      expect.stringMatching(new RegExp(`\\.${format}$`)),
+      'data:image/png,test',
+      expect.stringMatching(/\.png$/),
     );
   });
 

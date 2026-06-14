@@ -16,6 +16,9 @@ import { useProposalStore } from '../../stores/proposalStore';
 import { useVersionStore } from '../../stores/versionStore';
 import { useWorkflowStore } from '../../stores/workflowStore';
 import { useCanvasViewStore } from '../../stores/canvasViewStore';
+import { useFreeDrawingStore } from '../../stores/freeDrawingStore';
+import { useWorkspaceModeStore } from '../../stores/workspaceModeStore';
+import { switchWorkspaceMode } from '../../services/workspaceModeService';
 
 export type FastCommandExecutionResult = {
   status: CommandExecutionStatus;
@@ -106,6 +109,12 @@ export function createFastCommandExecutor({
           }
           message = '已自动排版';
           break;
+        case 'switch_to_free_drawing':
+          message = switchWorkspaceMode('free_drawing');
+          break;
+        case 'switch_to_diagram':
+          message = switchWorkspaceMode('diagram');
+          break;
         case 'pause':
           useVoiceStore.getState().setCommandPaused(true);
           message = '命令执行已暂停';
@@ -146,10 +155,11 @@ export function createFastCommandExecutor({
         case 'export_png': {
           const format = command.replace('export_', '') as 'json' | 'svg' | 'png';
           useExportStore.getState().setExporting(format);
-          const result = await exporter.export(
-            useDiagramStore.getState().diagram,
-            format,
-          );
+          const document =
+            useWorkspaceModeStore.getState().mode === 'free_drawing'
+              ? useFreeDrawingStore.getState().scene
+              : useDiagramStore.getState().diagram;
+          const result = await exporter.export(document, format);
           useExportStore.getState().setSuccess(result);
           message = `已导出 ${format.toUpperCase()}：${result.filename}`;
           break;

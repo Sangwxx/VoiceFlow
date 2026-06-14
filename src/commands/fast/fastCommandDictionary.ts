@@ -10,6 +10,26 @@ export const highPriorityCommands: FastCommandDefinition[] = [
   { command: 'cancel', phrases: ['取消', '取消当前操作', '算了'] },
   { command: 'pause', phrases: ['暂停', '停一下', '先别动', '停止执行'] },
   { command: 'resume', phrases: ['继续', '继续执行', '恢复执行'] },
+  {
+    command: 'switch_to_free_drawing',
+    phrases: [
+      '切换到自由画图模式',
+      '切换自由画图模式',
+      '进入自由画图模式',
+      '自由画图模式',
+      '打开自由画图',
+    ],
+  },
+  {
+    command: 'switch_to_diagram',
+    phrases: [
+      '切换到专业图表模式',
+      '切换专业图表模式',
+      '进入专业图表模式',
+      '专业图表模式',
+      '返回专业图表',
+    ],
+  },
 ];
 
 export const fastCommandDictionary: FastCommandDefinition[] = [
