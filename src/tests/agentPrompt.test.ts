@@ -11,6 +11,7 @@ describe('agentPrompt', () => {
     });
 
     expect(prompt).toContain('就视为信息充足');
-    expect(prompt).toContain('绝对不得返回 clarification');
+    expect(prompt).toContain('缺少普通细节时主动补全');
+    expect(prompt).toContain('关键歧义时，才允许返回 clarification');
   });
 });

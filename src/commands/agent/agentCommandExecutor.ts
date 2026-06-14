@@ -18,10 +18,11 @@ export function createAgentCommandExecutor(
   function request(
     originalCommand: string,
     intent: AgentIntent,
+    conversation = useAgentStore.getState().conversation,
   ): Promise<FastCommandExecutionResult> {
-    const key = `${intent}:${originalCommand.trim()}`;
+    const key = `${intent}:${originalCommand.trim()}:${JSON.stringify(conversation)}`;
     if (inFlight?.key === key) return inFlight.promise;
-    const promise = runRequest(originalCommand, intent).finally(() => {
+    const promise = runRequest(originalCommand, intent, conversation).finally(() => {
       if (inFlight?.key === key) inFlight = undefined;
     });
     inFlight = { key, promise };
@@ -31,6 +32,7 @@ export function createAgentCommandExecutor(
   async function runRequest(
     originalCommand: string,
     intent: AgentIntent,
+    conversation: ReturnType<typeof useAgentStore.getState>['conversation'],
   ): Promise<FastCommandExecutionResult> {
     const current = useAgentStore.getState();
     if (
@@ -55,7 +57,9 @@ export function createAgentCommandExecutor(
       previewDiagram: null,
       explanation: '',
       summary: '',
+      clarificationQuestion: '',
       error: null,
+      conversation,
       taskId,
       controller,
     });
@@ -124,22 +128,18 @@ export function createAgentCommandExecutor(
         ensureResultMatchesIntent(result, intent);
       }
       if (result.kind === 'clarification') {
-        if (intent === 'create_diagram') {
-          result = planLocalStructuralDiagram(originalCommand);
-        }
-      }
-      if (result.kind === 'clarification') {
-        const message = '无法确定具体修改目标，已保留当前画布';
+        const question = result.question;
         useAgentStore.getState().setStateForTask({
-          status: 'error',
+          status: 'clarifying',
           explanation: result.explanation,
-          summary: message,
-          conversation: state.conversation,
+          summary: '等待用户补充信息',
+          clarificationQuestion: question,
+          conversation: [...state.conversation, { role: 'assistant', content: question }],
           controller: null,
         });
-        useCommandStore.getState().setLastMessage(message);
-        void speechFeedback.speak(message);
-        return { status: 'error', message } as const;
+        useCommandStore.getState().setLastMessage(question);
+        void speechFeedback.speak(question);
+        return { status: 'ignored', message: question } as const;
       }
 
       useAgentStore.getState().setStateForTask({
@@ -185,7 +185,17 @@ export function createAgentCommandExecutor(
   return {
     execute(text: string, intent: AgentIntent): Promise<FastCommandExecutionResult> {
       useAgentStore.getState().setStateForTask({ conversation: [] });
-      return request(text, intent);
+      return request(text, intent, []);
+    },
+    answerClarification(text: string): Promise<FastCommandExecutionResult> {
+      const state = useAgentStore.getState();
+      if (state.status !== 'clarifying' || !state.intent || !state.originalCommand) {
+        return Promise.resolve({ status: 'ignored', message: '当前没有等待回答的问题' });
+      }
+      return request(state.originalCommand, state.intent, [
+        ...state.conversation,
+        { role: 'user', content: text },
+      ]);
     },
   };
 }

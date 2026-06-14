@@ -7,6 +7,7 @@ import { useCommandStore } from '../stores/commandStore';
 import { useDiagramStore } from '../stores/diagramStore';
 import { useVersionStore } from '../stores/versionStore';
 import { useVoiceStore } from '../stores/voiceStore';
+import { useAgentStore } from '../stores/agentStore';
 
 describe('competition app', () => {
   beforeEach(() => {
@@ -14,6 +15,7 @@ describe('competition app', () => {
     useVoiceStore.getState().reset();
     useCommandStore.getState().reset();
     useVersionStore.getState().clear();
+    useAgentStore.getState().clear();
   });
 
   afterEach(() => useVoiceStore.getState().reset());
@@ -87,6 +89,27 @@ describe('competition app', () => {
       );
     render(<App />);
     expect(screen.getByText('明确收录版本')).toBeInTheDocument();
+  });
+
+  it('shows the Agent question and allows cancelling it', async () => {
+    const user = userEvent.setup();
+    useAgentStore.getState().setStateForTask({
+      status: 'clarifying',
+      clarificationQuestion: '你想修改哪个节点？',
+      explanation: '当前画布有多个相似节点。',
+      originalCommand: '把节点改成红色',
+      intent: 'modify_diagram',
+    });
+
+    render(<App />);
+
+    expect(screen.getByRole('region', { name: 'AI 反问' })).toBeInTheDocument();
+    expect(screen.getByText('你想修改哪个节点？')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('输入对 AI 反问的回答')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '提交回答' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '取消本次任务' }));
+    expect(screen.queryByRole('region', { name: 'AI 反问' })).not.toBeInTheDocument();
   });
 
   it('opens the categorized tool manual from the canvas header', async () => {

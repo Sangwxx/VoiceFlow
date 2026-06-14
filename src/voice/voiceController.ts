@@ -10,6 +10,7 @@ import { routeCommand } from '../commands/router/commandRouter';
 import { createSimpleCommandExecutor } from '../commands/simple/simpleCommandExecutor';
 import type { SpeechFeedbackService } from '../services/speechFeedbackService';
 import { useCommandStore } from '../stores/commandStore';
+import { useAgentStore } from '../stores/agentStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import type { VoiceController, VoiceProvider } from './voiceTypes';
 import { createWorkflowCommandExecutor } from '../commands/workflow/workflowCommandExecutor';
@@ -192,6 +193,15 @@ export function createVoiceController({
     },
     async handleFinalTranscript(text: string) {
       const startedAt = performance.now();
+      if (useAgentStore.getState().status === 'clarifying') {
+        useVoiceStore.getState().setStatus('processing');
+        const result = await agentExecutor.answerClarification(text);
+        const voice = useVoiceStore.getState();
+        if (voice.status !== 'speaking') {
+          voice.setStatus(shouldListen ? 'listening' : 'idle');
+        }
+        return result;
+      }
       const calibration = calibrateAsrTranscript(text, {
         diagram: useDiagramStore.getState().diagram,
         recentCommands: useCommandStore

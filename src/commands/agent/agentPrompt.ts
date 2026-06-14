@@ -14,7 +14,7 @@ export function buildAgentPrompt(request: AgentRequest): string {
       : '生成图表时返回：{"kind":"diagram","title":"...","diagramType":"...","direction":"top_down|left_to_right","nodes":[{"id":"n1","label":"...","type":"..."}],"edges":[{"from":"n1","to":"n2","label":"可选"}],"groups":[{"label":"可选","nodeIds":["n1"]}],"summary":"..."}。',
     isModification
       ? '只有完全无法确定修改目标时才允许返回：{"kind":"clarification","explanation":"...","question":"..."}。'
-      : '创建请求只要明确表达画、生成或创建某类图，就视为信息充足。缺少主题、节点或步骤细节时必须根据图表类型和用户形容词主动补全，绝对不得返回 clarification。',
+      : '创建请求只要明确表达画、生成或创建某类图，就视为信息充足。缺少普通细节时主动补全；只有存在会明显改变图表含义的关键歧义时，才允许返回 clarification。',
     '图表类型可选：flowchart,architecture,organization,dataflow,usecase,mindmap,framework,table,generic。根据用户原话和主题选择，不要默认流程图。',
     '节点类型可选：start,end,process,decision,database,service,user,external,group。',
     '支持的连线类型：solid,dashed,highlight,weak。',

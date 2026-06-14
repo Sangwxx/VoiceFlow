@@ -6,6 +6,7 @@ import { hideExceptionPaths } from '../components/canvas/canvasView';
 import { registerCanvasViewportApi } from '../services/canvasViewportService';
 import { BrowserSpeechFeedbackService } from '../services/speechFeedbackService';
 import { useCanvasViewStore } from '../stores/canvasViewStore';
+import { useAgentStore } from '../stores/agentStore';
 import { useCommandStore } from '../stores/commandStore';
 import { useDiagramStore } from '../stores/diagramStore';
 import { useVersionStore } from '../stores/versionStore';
@@ -60,11 +61,15 @@ export function App() {
   const commandPaused = useVoiceStore((state) => state.commandPaused);
   const voiceTasks = useVoiceStore((state) => state.taskQueue);
   const lastMessage = useCommandStore((state) => state.lastMessage);
+  const agentStatus = useAgentStore((state) => state.status);
+  const clarificationQuestion = useAgentStore((state) => state.clarificationQuestion);
+  const clarificationExplanation = useAgentStore((state) => state.explanation);
   const versions = useVersionStore((state) => state.versions);
   const exceptionPathsHidden = useCanvasViewStore((state) => state.exceptionPathsHidden);
   const controller = useMemo(() => createBrowserVoiceController(), []);
   const taskListRef = useRef<HTMLOListElement>(null);
   const recordingEnabled = voiceStatus !== 'idle' && voiceStatus !== 'unsupported';
+  const awaitingAgentAnswer = agentStatus === 'clarifying';
   const currentTask =
     voiceTasks.find((task) =>
       ['executing', 'verifying', 'needs_clarification', 'awaiting_confirmation'].includes(
@@ -136,6 +141,22 @@ export function App() {
           </div>
         </section>
 
+        {awaitingAgentAnswer ? (
+          <section className={styles.clarificationSection} aria-label="AI 反问">
+            <div className={styles.sectionHeading}>
+              <div>
+                <span>AI 需要补充信息</span>
+                <small>请直接说出答案，或在下方文字框中回答</small>
+              </div>
+            </div>
+            <strong>{clarificationQuestion}</strong>
+            {clarificationExplanation ? <p>{clarificationExplanation}</p> : null}
+            <button type="button" onClick={() => useAgentStore.getState().cancel()}>
+              取消本次任务
+            </button>
+          </section>
+        ) : null}
+
         <form
           className={styles.textCommandSection}
           aria-label="文字指令测试"
@@ -153,12 +174,20 @@ export function App() {
           <div className={styles.textCommandControls}>
             <input
               aria-label="输入测试指令"
-              placeholder="例如：画一个学生选课用例图"
+              placeholder={
+                awaitingAgentAnswer
+                  ? '输入对 AI 反问的回答'
+                  : '例如：画一个学生选课用例图'
+              }
               value={textCommand}
               onChange={(event) => setTextCommand(event.target.value)}
             />
             <button disabled={!textCommand.trim() || textCommandPending} type="submit">
-              {textCommandPending ? '执行中' : '执行指令'}
+              {textCommandPending
+                ? '执行中'
+                : awaitingAgentAnswer
+                  ? '提交回答'
+                  : '执行指令'}
             </button>
           </div>
         </form>

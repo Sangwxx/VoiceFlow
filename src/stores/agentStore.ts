@@ -17,6 +17,7 @@ export type AgentStoreState = {
   previewDiagram: Diagram | null;
   explanation: string;
   summary: string;
+  clarificationQuestion: string;
   error: string | null;
   taskId: string | null;
   controller: AbortController | null;
@@ -35,6 +36,7 @@ const initial = {
   previewDiagram: null,
   explanation: '',
   summary: '',
+  clarificationQuestion: '',
   error: null,
   taskId: null,
   controller: null,

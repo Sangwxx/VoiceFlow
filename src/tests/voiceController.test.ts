@@ -26,6 +26,27 @@ function createTestController(provider: MockVoiceProvider) {
   });
 }
 
+function createClarifyingController(provider: MockVoiceProvider) {
+  let calls = 0;
+  return createVoiceController({
+    provider,
+    speechFeedback,
+    aiProvider: {
+      mode: 'real',
+      model: 'test-model',
+      complete: vi.fn().mockImplementation(() => {
+        calls += 1;
+        return calls === 1
+          ? { kind: 'clarification', question: '你要修改哪个节点？' }
+          : {
+              kind: 'operations',
+              operations: [{ type: 'apply_layout', direction: 'left_to_right' }],
+            };
+      }),
+    },
+  });
+}
+
 describe('voiceController integration', () => {
   beforeEach(() => {
     useDiagramStore.getState().reset();
@@ -89,6 +110,22 @@ describe('voiceController integration', () => {
       expect(useVoiceStore.getState().finalTranscript).toBe('横向布局');
       expect(useDiagramStore.getState().diagram.layout.direction).toBe('left_to_right');
     });
+  });
+
+  it('treats the next voice command as the answer to an Agent question', async () => {
+    const provider = new MockVoiceProvider();
+    const controller = createClarifyingController(provider);
+
+    await controller.handleFinalTranscript('把当前图整理一下');
+    expect(useAgentStore.getState()).toMatchObject({
+      status: 'clarifying',
+      clarificationQuestion: '你要修改哪个节点？',
+    });
+
+    await controller.handleFinalTranscript('全部节点');
+
+    expect(useDiagramStore.getState().diagram.layout.direction).toBe('left_to_right');
+    expect(useAgentStore.getState().status).toBe('idle');
   });
 
   it('clears a stale recognition network error when a new result arrives', () => {

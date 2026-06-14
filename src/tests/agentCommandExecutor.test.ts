@@ -34,18 +34,28 @@ describe('agentCommandExecutor', () => {
     expect(useDiagramStore.getState().diagram.id).toBe(original.id);
   });
 
-  it('returns an error instead of blocking on Agent clarification', async () => {
+  it('waits for an answer and continues the original Agent request', async () => {
     const executor = createAgentCommandExecutor(clarificationProvider(), feedback);
     await expect(
       executor.execute('把当前图整理清楚', 'modify_diagram'),
-    ).resolves.toMatchObject({ status: 'error' });
-    expect(useAgentStore.getState().status).toBe('error');
+    ).resolves.toMatchObject({ status: 'ignored', message: '请补充具体流程' });
+    expect(useAgentStore.getState()).toMatchObject({
+      status: 'clarifying',
+      clarificationQuestion: '请补充具体流程',
+      originalCommand: '把当前图整理清楚',
+    });
+
+    await expect(executor.answerClarification('改成横向布局')).resolves.toMatchObject({
+      status: 'success',
+    });
+    expect(useDiagramStore.getState().diagram.layout.direction).toBe('left_to_right');
+    expect(useAgentStore.getState().status).toBe('idle');
   });
 
-  it('fills in a complete creation intent locally when AI asks for clarification', async () => {
+  it('also supports clarification for a materially ambiguous creation request', async () => {
     const complete = vi.fn().mockResolvedValue({
       kind: 'clarification',
-      question: '请补充具体流程',
+      question: '你希望围绕哪个业务主题？',
     });
     const executor = createAgentCommandExecutor(
       { mode: 'real', model: 'test-model', complete },
@@ -53,19 +63,14 @@ describe('agentCommandExecutor', () => {
     );
 
     await expect(
-      executor.execute('生成一个最简单的流程图', 'create_diagram'),
-    ).resolves.toMatchObject({ status: 'success' });
+      executor.execute('生成一个业务图', 'create_diagram'),
+    ).resolves.toMatchObject({ status: 'ignored' });
 
     expect(complete).toHaveBeenCalledTimes(1);
-    expect(useDiagramStore.getState().diagram).toMatchObject({
-      title: '最简流程图',
-      diagramType: 'flowchart',
+    expect(useAgentStore.getState()).toMatchObject({
+      status: 'clarifying',
+      clarificationQuestion: '你希望围绕哪个业务主题？',
     });
-    expect(useDiagramStore.getState().diagram.nodes.map((node) => node.label)).toEqual([
-      '开始',
-      '执行操作',
-      '结束',
-    ]);
   });
 
   it('cancels in-flight requests without changing the diagram', async () => {
@@ -257,11 +262,10 @@ function clarificationProvider(): AiProvider {
       calls += 1;
       return calls === 1
         ? { kind: 'clarification', question: '请补充具体流程' }
-        : diagramProvider('flowchart').complete({
-            intent: 'create_diagram',
-            originalCommand: '',
-            conversation: [],
-          });
+        : {
+            kind: 'operations',
+            operations: [{ type: 'apply_layout', direction: 'left_to_right' }],
+          };
     }),
   };
 }
