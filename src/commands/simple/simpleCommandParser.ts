@@ -153,7 +153,14 @@ function parseInsertNode(text: string): SimpleOperationDraft | null {
 
 function parseUpdateEdgeStyle(text: string): SimpleOperationDraft | null {
   const match = text.match(/^把(.+?)(?:改成|设为)(.+)$/);
-  if (!match || (!match[1].includes('分支') && !match[1].includes('线'))) return null;
+  if (
+    !match ||
+    (!match[1].includes('分支') &&
+      !match[1].includes('线') &&
+      !/^物体\d+$/.test(match[1]))
+  ) {
+    return null;
+  }
   const colorName = COLOR_NAMES.find((color) => match[2].includes(color));
   const lineType = match[2].includes('虚线')
     ? 'dashed'

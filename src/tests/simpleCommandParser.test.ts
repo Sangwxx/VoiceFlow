@@ -16,6 +16,7 @@ describe('parseSimpleCommand', () => {
     ['把正方形移动到最下方', 'move_node'],
     ['删除登录页到验证码校验的连线', 'delete_edge'],
     ['把失败分支改成红色虚线', 'update_edge_style'],
+    ['把物体 10 改成红色虚线', 'update_edge_style'],
   ])('parses "%s" as %s', (text, intent) => {
     expect(parseSimpleCommand(text)).toMatchObject({ status: 'ready', intent });
   });
