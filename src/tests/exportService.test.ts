@@ -54,6 +54,40 @@ describe('export service', () => {
     expect(result.filename).toContain('花朵与杯子');
   });
 
+  it('exports free drawing SVG as standalone vector content', async () => {
+    const download = vi.fn();
+    const captureSvg = vi.fn();
+    const service = new BrowserExportService({ download, captureSvg });
+    await service.export(
+      {
+        id: 'free-scene',
+        title: '自由杯子',
+        width: 1000,
+        height: 700,
+        objects: [
+          {
+            id: 'cup',
+            type: 'circle',
+            label: '杯子',
+            cx: 500,
+            cy: 350,
+            radius: 100,
+            fill: '#60a5fa',
+          },
+        ],
+        updatedAt: new Date().toISOString(),
+      },
+      'svg',
+    );
+
+    const [dataUrl, filename] = download.mock.calls[0];
+    const svg = decodeURIComponent(String(dataUrl).split(',')[1]);
+    expect(filename).toMatch(/\.svg$/);
+    expect(svg).toContain('<circle');
+    expect(svg).not.toContain('foreignObject');
+    expect(captureSvg).not.toHaveBeenCalled();
+  });
+
   it('mounts a browser download link before clicking it', async () => {
     vi.useFakeTimers();
     const click = vi

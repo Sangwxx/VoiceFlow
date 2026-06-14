@@ -4,6 +4,7 @@ import { getCanvasElement } from '../../services/canvasElementService';
 import { getCanvasViewportApi } from '../../services/canvasViewportService';
 import type { Diagram } from '../diagram/diagramTypes';
 import type { FreeDrawingScene } from '../freeDrawing/freeDrawingTypes';
+import { freeDrawingSvgDataUrl } from './freeDrawingSvgSerializer';
 
 export type ExportFormat = 'json' | 'svg' | 'png';
 export type ExportResult = { format: ExportFormat; filename: string; durationMs: number };
@@ -58,6 +59,8 @@ export class BrowserExportService implements ExportService {
       url = URL.createObjectURL(
         new Blob([JSON.stringify(document, null, 2)], { type: 'application/json' }),
       );
+    } else if (format === 'svg' && isFreeDrawingScene(document)) {
+      url = freeDrawingSvgDataUrl(document);
     } else {
       const viewport = getCanvasViewportApi();
       const element = getCanvasElement();
@@ -87,4 +90,8 @@ export class BrowserExportService implements ExportService {
     }
     return { format, filename, durationMs: Math.round(performance.now() - startedAt) };
   }
+}
+
+function isFreeDrawingScene(document: ExportDocument): document is FreeDrawingScene {
+  return 'objects' in document && 'width' in document && 'height' in document;
 }

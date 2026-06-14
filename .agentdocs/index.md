@@ -18,6 +18,7 @@
 
 ## 已完成任务文档
 
+- `workflow/done/260614-fix-free-drawing-svg-export.md`：修复自由画布 SVG 导出空白问题。
 - `workflow/done/260614-ai-free-drawing-planner.md`：自由画布本地增删动作与 AI 通用 SVG 图元规划。
 - `workflow/done/260614-free-drawing-mode.md`：专业图表与自由画图按钮切换、SVG 自由画布和基础自由绘图指令。
 - `workflow/done/260614-export-agent-context-boundaries.md`：真实浏览器导出、Agent JSON 容错和画布级对话上下文边界。
